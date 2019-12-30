@@ -32,7 +32,7 @@ npm run up
 ## API
 
 Method    | URI               | Middleware
---------- | ----------------- | ----------
+:-------- | :---------------- | :---------
 POST      | /register         | guest
 POST      | /login            | guest
 POST      | /logout           | auth
@@ -49,8 +49,8 @@ POST      | /password/confirm | auth
 curl localhost:3000/register -H 'Content-Type: application/json' -d \
   '{"email":"alex@gmail.com","name":"Alex","password":"Secret12","passwordConfirmation":"Secret12"}'
 
-curl localhost:3000/login -H 'Content-Type: application/json' \
-  -d '{"email":"alex@gmail.com","password":"Secret12"}'
+curl localhost:3000/login -H 'Content-Type: application/json' -d \
+  '{"email":"alex@gmail.com","password":"Secret12"}'
 
 curl -X POST localhost:3000/logout --cookie \
   'sid=s%3Aly4gTFBASuA0T1h0HLls7l6bKv-TUii2.N2GGaZ5GbJnOOdwRjtIYdckmbvoqRw3QvL1d3MOINr8'
@@ -58,13 +58,13 @@ curl -X POST localhost:3000/logout --cookie \
 curl localhost:3000/home --cookie \
   'sid=s%3Aly4gTFBASuA0T1h0HLls7l6bKv-TUii2.N2GGaZ5GbJnOOdwRjtIYdckmbvoqRw3QvL1d3MOINr8'
 
-curl -X POST 'localhost:3000/email/verify?id=5dfe5127c33a5227e5829918&token=7a7d918c126cca27e911eab493164e4194633764&expires=1576991208354&signature=b5ef23ac977e7cebcb00b1769b974471eb234c5a183728aba2e48e359669461b'
+curl -X POST 'localhost:3000/email/verify?id=...&token=...&expires=...&signature=...'
 
 curl localhost:3000/email/resend -H 'Content-Type: application/json' -d '{"email":"alex@gmail.com"}'
 
 curl localhost:3000/password/email -H 'Content-Type: application/json' -d '{"email":"alex@gmail.com"}'
 
-curl 'localhost:3000/password/reset?id=5dfe54f5f778332a6e61f926&token=25276d8b011f36a38a696a599d3552dca61893137d0e8cba3a16463da7543c8d2cb37ae3a7fc8553' \
+curl 'localhost:3000/password/reset?id=...&token=...' \
   -H 'Content-Type: application/json' -d '{"password":"Secret12","passwordConfirmation":"Secret12"}'
 
 curl localhost:3000/password/confirm -H 'Content-Type: application/json' -d '{"password":"Secret12"}' \
@@ -117,7 +117,7 @@ interface RememberMe {
 
 - reset token
   - pseudo-random string of 80 hex chars (_unpredictable_)
-  - hashed with HMAC SHA256 before stored in DB (_doesn't compromise accounts_)
+  - signed with HMAC SHA256 before storing in DB (_doesn't compromise accounts_)
   - expires in 1h (_short-lived_)
 - reset link
   - when used, invalidates old tokens (_one-time use_)
@@ -126,7 +126,7 @@ interface RememberMe {
 
 - remember me token
   - pseudo-random string of 80 hex chars (_unpredictable_)
-  - hashed with HMAC SHA256 before stored in DB (_doesn't compromise accounts_)
+  - signed with HMAC SHA256 before storing in DB (_doesn't compromise accounts_)
   - expires in 1 week (_long-lived_)
 - remember me cookie
   - signed with HMAC SHA256 (_unforgeable_)
