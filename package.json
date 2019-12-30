@@ -8,11 +8,20 @@
     "postup": "npm run dev",
     "stop": "docker-compose stop",
     "down": "docker-compose down",
-    "dev": "npm run dev --prefix api"
+    "dev": "npm run dev --prefix api",
+    "commit": "git-cz"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "commitizen": "^4.0.3",
+    "cz-conventional-changelog": "^3.0.2"
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
+  }
 }
