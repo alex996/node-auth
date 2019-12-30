@@ -132,7 +132,7 @@ interface RememberMe {
   - signed with HMAC SHA256 (_unforgeable_)
   - creates a new user session unless already authenticated
 
-## Insipiration
+## Inspiration
 
 Originally prompted by [Your Node.js authentication tutorial is (probably) wrong](https://medium.com/hackernoon/your-node-js-authentication-tutorial-is-wrong-f1a3bf831a46). Although its critique is on point, the article sadly doesn't offer any concrete solutions. This repo is my attempt to address those remarks in code.
 
