@@ -26,7 +26,7 @@ router.post('/login', guest, catchAsync(async (req, res) => {
 router.post('/logout', auth, catchAsync(async (req, res) => {
   await logOut(req, res)
 
-  res.json({ message: 'OK' })
+
 }))
 
 export { router as login }
