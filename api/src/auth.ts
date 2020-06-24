@@ -14,7 +14,7 @@ export const logOut = (req: Request, res: Response) =>
     req.session!.destroy((err: Error) => {
       if (err) reject(err)
 
-      res.clearCookie(SESSION_NAME)
+      res.clearCookie(SESSION_NAME).json({ message: 'OK' });
 
       resolve()
     })
