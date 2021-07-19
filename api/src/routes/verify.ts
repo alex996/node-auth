@@ -17,17 +17,10 @@ router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
       .json({ message: "Email is invalid or already verified" });
   }
 
-  const expectedUrl = Buffer.from(confirmationUrl(Number(id), Number(expires)));
-  const actualUrl = Buffer.from(`${APP_ORIGIN}${req.originalUrl}`);
+  const expectedUrl = confirmationUrl(Number(id), Number(expires));
+  const actualUrl = `${APP_ORIGIN}${req.originalUrl}`;
 
-  // Perform constant-time comparison to safeguard against a timing attack
-  const sameLength = expectedUrl.length === actualUrl.length;
-  const sameContents = timingSafeEqual(
-    expectedUrl,
-    sameLength ? actualUrl : expectedUrl
-  );
-
-  if (!sameLength || !sameContents) {
+  if (!safeCompare(expectedUrl, actualUrl)) {
     return res.status(400).json({ message: "URL signature is invalid" });
   }
 
@@ -59,6 +52,17 @@ export function confirmationUrl(userId: number, expiresInMs?: number) {
   const signature = createHmac("sha256", APP_KEY).update(url).digest("hex"); // 32 * 2 = 64 chars
 
   return `${url}&signature=${signature}`;
+}
+
+// Perform constant-time string comparison against a timing attack
+function safeCompare(a: string, b: string) {
+  const aBuff = Buffer.from(a);
+  const bBuff = Buffer.from(b);
+
+  const sameLength = aBuff.length === bBuff.length;
+  const sameContents = timingSafeEqual(aBuff, sameLength ? bBuff : aBuff);
+
+  return Number(sameLength) + Number(sameContents) === 2;
 }
 
 export { router as verify };
