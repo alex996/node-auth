@@ -1,11 +1,14 @@
 import { Router } from "express";
-import { timingSafeEqual, createHmac } from "crypto";
+import { createHmac } from "crypto";
 import dayjs from "dayjs";
 import { validate, verifyEmailSchema, resendEmailSchema } from "../validation";
 import { db } from "../db";
+import { safeEqual } from "../utils";
 import { EMAIL_EXPIRATION_DAYS, APP_ORIGIN, APP_KEY } from "../config";
 
 const router = Router();
+
+// Email verification
 
 router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
   const { id, expires } = req.query;
@@ -20,14 +23,20 @@ router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
   const expectedUrl = confirmationUrl(Number(id), Number(expires));
   const actualUrl = `${APP_ORIGIN}${req.originalUrl}`;
 
-  if (!safeCompare(expectedUrl, actualUrl)) {
-    return res.status(400).json({ message: "URL signature is invalid" });
+  if (!safeEqual(expectedUrl, actualUrl)) {
+    return res.status(400).json({ message: "URL is invalid" });
+  }
+
+  if (Number(expires) <= Date.now()) {
+    res.status(400).json({ message: "URL has expired" });
   }
 
   user.verifiedAt = new Date().toISOString();
 
   res.json({ message: "OK" });
 });
+
+// Email resend
 
 router.post("/email/resend", validate(resendEmailSchema), (req, res) => {
   const { email } = req.body;
@@ -44,6 +53,8 @@ router.post("/email/resend", validate(resendEmailSchema), (req, res) => {
   res.json({ message: "OK" });
 });
 
+// Utils
+
 export function confirmationUrl(userId: number, expiresInMs?: number) {
   expiresInMs =
     expiresInMs || dayjs().add(EMAIL_EXPIRATION_DAYS, "day").valueOf();
@@ -52,17 +63,6 @@ export function confirmationUrl(userId: number, expiresInMs?: number) {
   const signature = createHmac("sha256", APP_KEY).update(url).digest("hex"); // 32 * 2 = 64 chars
 
   return `${url}&signature=${signature}`;
-}
-
-// Perform constant-time string comparison against a timing attack
-function safeCompare(a: string, b: string) {
-  const aBuff = Buffer.from(a);
-  const bBuff = Buffer.from(b);
-
-  const sameLength = aBuff.length === bBuff.length;
-  const sameContents = timingSafeEqual(aBuff, sameLength ? bBuff : aBuff);
-
-  return Number(sameLength) + Number(sameContents) === 2;
 }
 
 export { router as verify };

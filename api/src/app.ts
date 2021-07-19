@@ -15,6 +15,8 @@ app.use(session(SESSION_OPTS));
 
 app.use(express.json());
 
+app.get("/", (req, res) => res.json({ message: "OK" })); // health
+
 app.use(
   auth, // login, logout, register
   verify // email verification, resend

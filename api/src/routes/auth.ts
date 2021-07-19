@@ -1,17 +1,13 @@
 import { Router } from "express";
 import { compare, hash } from "bcrypt";
-import { createHash } from "crypto";
-import { confirmationUrl } from "./verify";
 import { validate, loginSchema, registerSchema } from "../validation";
 import { db, User } from "../db";
+import { sha256 } from "../utils";
 import { auth, guest } from "../middleware";
 import { SESSION_COOKIE, BCRYPT_SALT_ROUNDS } from "../config";
+import { confirmationUrl } from "./verify";
 
 const router = Router();
-
-// Health
-
-router.get("/", (req, res) => res.json({ message: "OK" }));
 
 // Login
 
@@ -22,14 +18,18 @@ router.post("/login", validate(loginSchema), async (req, res) => {
 
   // TODO this lookup isn't constant time, so it can leak information
   // (ex: when the email doesn't exist). When using a DB like Postgres,
-  // index the `email` field so that the query is timing-safe.
+  // index the `email` field so that your query is timing-safe.
   const user = db.users.find((user) => user.email === email);
 
-  // NOTE even if the user doesn't exist, we still hash the password.
-  // It's purposely inefficient so as to mitigate the timing attack.
+  // NOTE even if the user doesn't exist, we still hash the plaintext
+  // password. Although inefficient, this helps mitigate a timing attack.
   const fakeHash =
     "$2b$12$tLn0rFkPBoE1WCpdM6MjR.t/h6Wzql1kAd27FecEDtjRYsTFlYlWa"; // 'test'
   const pwdHash = user?.password || fakeHash;
+  // NOTE bcrypt truncates the input string after 72 bytes, meaning
+  // you can still log in with just the first 72 bytes of your password.
+  // To prevent this, we prehash plaintext passwords before running them
+  // through bcrypt. https://security.stackexchange.com/q/6623
   const pwdMatches = await compare(sha256(password), pwdHash);
 
   // NOTE bcrypt's compare() is *not* timing-safe
@@ -93,17 +93,5 @@ router.post("/register", guest, validate(registerSchema), async (req, res) => {
 
   res.status(201).json({ message: "OK" });
 });
-
-// Bcrypt truncates the input string after 72 bytes, making it
-// easier to guess passwords. As a workaround, we prehash plaintext
-// passwords before running them through bcrypt. Alternatively,
-// we could limit user passwords to 72 bytes but this would likely
-// leak the password algorithm (bcrypt) and confuse our users.
-// https://security.stackexchange.com/q/6623
-function sha256(plaintext: string) {
-  // SHA256 always produces a string that's 256 bits (or 32 bytes) long.
-  // In base64, it's ceil(32 / 3) * 4 = 44 characters long.
-  return createHash("sha256").update(plaintext).digest("base64");
-}
 
 export { router as auth };
