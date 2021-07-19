@@ -7,7 +7,7 @@ t.test("/login - happy path", async (t) => {
     .post("/login")
     .send({ email: "test@gmail.com", password: "test" })
     .expect(200)
-    .expect("Set-Cookie", /sid=.+; HttpOnly; SameSite=Strict/);
+    .expect("Set-Cookie", /sid=.+; Expires=.+; HttpOnly; SameSite=Strict/);
 });
 
 t.test("/login - missing credentials", async (t) => {
@@ -35,4 +35,17 @@ t.test("/login - invalid password (user does exist)", async (t) => {
     .expect(401);
 
   t.equal(res.body.message, "Email or password is invalid");
+});
+
+t.test("/login - already logged in", async (t) => {
+  const payload = { email: "test@gmail.com", password: "test" };
+
+  const req = await request(app).post("/login").send(payload).expect(200);
+
+  await request(app)
+    .post("/login")
+    .set("Cookie", [req.headers.sid])
+    .send(payload)
+    .expect(200)
+    .expect("Set-Cookie", /sid=.+; Expires=.+; HttpOnly; SameSite=Strict/);
 });
