@@ -68,5 +68,9 @@
     /* Advanced Options */
     "skipLibCheck": true /* Skip type checking of declaration files. */,
     "forceConsistentCasingInFileNames": true /* Disallow inconsistently-cased references to the same file. */
+  },
+  // ts-node doesn't seem to load .d.ts files https://stackoverflow.com/q/51610583
+  "ts-node": {
+    "files": true
   }
 }
