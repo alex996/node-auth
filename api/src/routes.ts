@@ -1,8 +1,9 @@
 import { Router } from "express";
+import { compare, hash } from "bcrypt";
 import { validate, loginSchema, registerSchema } from "./validation";
 import { db } from "./db";
 import { auth, guest } from "./middleware";
-import { SESSION_COOKIE } from "./config";
+import { SESSION_COOKIE, PASSWORD_SALT_ROUNDS } from "./config";
 
 export const router = Router();
 
@@ -14,14 +15,26 @@ router.get("/", (req, res) => res.json({ message: "OK" }));
 
 // NOTE login is idempotent, so we don't apply `guest` middleware
 // https://stackoverflow.com/a/18263884
-router.post("/login", validate(loginSchema), (req, res) => {
+router.post("/login", validate(loginSchema), async (req, res) => {
   const { email, password } = req.body;
 
+  // TODO this lookup isn't constant time, so it can leak information
+  // (ex: when the email doesn't exist). When using a DB like Postgres,
+  // index the `email` field so that the query is timing-safe.
   const user = db.users.find((user) => user.email === email);
 
-  // TODO hash + safeCompare password
-  if (!user || user.password !== password) {
-    // 401 for invalid creds https://stackoverflow.com/a/32752617
+  // NOTE to mitigate a timing attack, we still hash the password
+  // even if the user doesn't exist. That said, bcrypt's compare() itself
+  // is *not* timing-safe https://github.com/kelektiv/node.bcrypt.js/issues/720
+  // This is fine because the generated hash can't be predicted,
+  // so the attacker can't learn anything based on the time of this comparison
+  // https://github.com/bcrypt-ruby/bcrypt-ruby/pull/43
+  const fakeHash =
+    "$2b$12$tLn0rFkPBoE1WCpdM6MjR.t/h6Wzql1kAd27FecEDtjRYsTFlYlWa"; // 'test'
+  const pwdMatches = await compare(password, user?.password || fakeHash);
+
+  if (!user || !pwdMatches) {
+    // Return 401 for invalid creds https://stackoverflow.com/a/32752617
     return res.status(401).json({
       message: "Email or password is invalid",
     });
@@ -46,7 +59,7 @@ router.post("/logout", auth, (req, res) => {
 
 // Register
 
-router.post("/register", guest, validate(registerSchema), (req, res) => {
+router.post("/register", guest, validate(registerSchema), async (req, res) => {
   const { email, password, name } = req.body;
 
   const userExists = db.users.some((user) => user.email === email);
@@ -61,7 +74,7 @@ router.post("/register", guest, validate(registerSchema), (req, res) => {
   const user = {
     id: db.users.length + 1,
     email,
-    password, // TODO hash
+    password: await hash(password, PASSWORD_SALT_ROUNDS),
     name,
   };
 

@@ -29,3 +29,5 @@ export const SESSION_OPTS: SessionOptions = {
   saveUninitialized: false, // whether to save empty sessions to the store
   secret: SESSION_SECRET,
 };
+
+export const PASSWORD_SALT_ROUNDS = 12;
