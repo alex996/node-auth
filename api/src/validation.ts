@@ -23,3 +23,17 @@ export const registerSchema = {
     name: Joi.string().required(),
   }),
 };
+
+export const verifyEmailSchema = {
+  [Segments.QUERY]: {
+    id: Joi.number().positive().required(),
+    expires: Joi.date().timestamp().raw().required(),
+    signature: Joi.string().length(64).required(),
+  },
+};
+
+export const resendEmailSchema = {
+  [Segments.BODY]: Joi.object().keys({
+    email,
+  }),
+};

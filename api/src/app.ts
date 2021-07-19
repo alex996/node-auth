@@ -4,7 +4,7 @@ import helmet from "helmet";
 import session from "express-session";
 import { errors } from "celebrate";
 import { SESSION_OPTS } from "./config";
-import { router } from "./routes";
+import { auth, verify } from "./routes";
 import { notFound, serverError } from "./middleware";
 
 const app = express();
@@ -15,7 +15,10 @@ app.use(session(SESSION_OPTS));
 
 app.use(express.json());
 
-app.use(router);
+app.use(
+  auth, // login, logout, register
+  verify // email verification, resend
+);
 
 app.use(notFound);
 

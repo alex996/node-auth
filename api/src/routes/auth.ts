@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { compare, hash } from "bcrypt";
 import { createHash } from "crypto";
-import { validate, loginSchema, registerSchema } from "./validation";
-import { db } from "./db";
-import { auth, guest } from "./middleware";
-import { SESSION_COOKIE, BCRYPT_SALT_ROUNDS } from "./config";
+import { confirmationUrl } from "./verify";
+import { validate, loginSchema, registerSchema } from "../validation";
+import { db, User } from "../db";
+import { auth, guest } from "../middleware";
+import { SESSION_COOKIE, BCRYPT_SALT_ROUNDS } from "../config";
 
-export const router = Router();
+const router = Router();
 
 // Health
 
@@ -74,16 +75,21 @@ router.post("/register", guest, validate(registerSchema), async (req, res) => {
     });
   }
 
-  const user = {
+  // Create the user
+  const user: User = {
     id: db.users.length + 1,
     email,
     password: await hash(sha256(password), BCRYPT_SALT_ROUNDS),
     name,
+    verifiedAt: null,
   };
-
   db.users.push(user);
 
+  // Authenticate
   req.session.userId = user.id;
+
+  // TODO Send a confirmation email
+  const url = confirmationUrl(user.id);
 
   res.status(201).json({ message: "OK" });
 });
@@ -95,6 +101,9 @@ router.post("/register", guest, validate(registerSchema), async (req, res) => {
 // leak the password algorithm (bcrypt) and confuse our users.
 // https://security.stackexchange.com/q/6623
 function sha256(plaintext: string) {
-  // SHA256 always produces a string that's 256 bits (or 32 bytes) long
+  // SHA256 always produces a string that's 256 bits (or 32 bytes) long.
+  // In base64, it's ceil(32 / 3) * 4 = 44 characters long.
   return createHash("sha256").update(plaintext).digest("base64");
 }
+
+export { router as auth };
