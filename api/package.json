@@ -5,11 +5,11 @@
   "main": "dist/index.js",
   "license": "MIT",
   "scripts": {
-    "dev": "tsnd --transpile-only src",
+    "dev": "env $(grep -v '^#' .env) tsnd --transpile-only src",
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.build.json",
     "start": "NODE_ENV=production node -r source-map-support/register dist/index.js",
-    "test": "tap --ts --no-coverage",
+    "test": "env $(grep -v '^#' .env) tap --ts --no-coverage",
     "test:watch": "npm run test -- -w"
   },
   "dependencies": {
