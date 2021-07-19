@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createHmac } from "crypto";
+import { timingSafeEqual, createHmac } from "crypto";
 import dayjs from "dayjs";
 import { validate, verifyEmailSchema, resendEmailSchema } from "../validation";
 import { db } from "../db";
@@ -17,10 +17,17 @@ router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
       .json({ message: "Email is invalid or already verified" });
   }
 
-  const expectedUrl = confirmationUrl(Number(id), Number(expires));
-  const actualUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+  const expectedUrl = Buffer.from(confirmationUrl(Number(id), Number(expires)));
+  const actualUrl = Buffer.from(`${APP_ORIGIN}${req.originalUrl}`);
 
-  if (expectedUrl !== actualUrl) {
+  // Perform constant-time comparison to safeguard against a timing attack
+  const sameLength = expectedUrl.length === actualUrl.length;
+  const sameContents = timingSafeEqual(
+    expectedUrl,
+    sameLength ? actualUrl : expectedUrl
+  );
+
+  if (!sameLength || !sameContents) {
     return res.status(400).json({ message: "URL signature is invalid" });
   }
 
