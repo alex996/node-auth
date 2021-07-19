@@ -30,4 +30,4 @@ export const SESSION_OPTS: SessionOptions = {
   secret: SESSION_SECRET,
 };
 
-export const PASSWORD_SALT_ROUNDS = 12;
+export const BCRYPT_SALT_ROUNDS = 12;
