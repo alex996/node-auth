@@ -19,4 +19,20 @@ t.test("/login - missing credentials", async (t) => {
   );
 });
 
-t.todo("/login - invalid credentials");
+t.test("/login - invalid email (user doesn't exist)", async (t) => {
+  const res = await request(app)
+    .post("/login")
+    .send({ email: "bogus@gmail.com", password: "bogus" })
+    .expect(401);
+
+  t.equal(res.body.message, "Email or password is invalid");
+});
+
+t.test("/login - invalid password (user does exist)", async (t) => {
+  const res = await request(app)
+    .post("/login")
+    .send({ email: "test@gmail.com", password: "wrong" })
+    .expect(401);
+
+  t.equal(res.body.message, "Email or password is invalid");
+});

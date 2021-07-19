@@ -8,6 +8,8 @@ const {
   SESSION_SECRET = "b2967d2927034d431d510820ea6363c2",
 } = process.env;
 
+export { SESSION_COOKIE };
+
 const IN_PROD = NODE_ENV === "production";
 
 const ONE_HOUR_IN_MS = 1_000 * 60 * 60;
