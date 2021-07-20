@@ -1,6 +1,12 @@
 import t from "tap";
 import request from "supertest";
-import { app } from "../src/app";
+import { app } from "./setup";
+
+t.test("/ - headers", async (t) => {
+  const res = await request(app).get("/").expect(200);
+
+  t.notOk(res.headers["x-powered-by"]);
+});
 
 t.test("/bogus - not found", async (t) => {
   await request(app).get("/bogus").expect(404);

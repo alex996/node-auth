@@ -1,5 +1,7 @@
 import { timingSafeEqual, createHash } from "crypto";
 
+// Crypto
+
 // Perform a constant-time comparison when the strings have the same length.
 export const safeEqual = (a: string, b: string) => {
   const aBuff = Buffer.from(a);
@@ -16,3 +18,7 @@ export const sha256 = (plaintext: string) => {
   // In base64, that's ceil(32 / 3) * 4 = 44 characters long.
   return createHash("sha256").update(plaintext).digest("base64");
 };
+
+// String
+
+export const compress = (str: string) => str.replace(/\s{2,}/g, "");

@@ -1,29 +1,42 @@
 import { SessionOptions } from "express-session";
+import SMTPTransport from "nodemailer/lib/smtp-transport";
 
-const {
+export const {
   NODE_ENV = "development",
-
-  SESSION_COOKIE = "sid",
-  SESSION_SECRET = "", // crypto.randomBytes(16).toString('hex')
 
   APP_PORT = 3000,
   APP_HOSTNAME = "localhost",
   APP_KEY = "", // crypto.randomBytes(32).toString('base64')
+
+  SESSION_COOKIE = "sid",
+  SESSION_SECRET = "", // crypto.randomBytes(16).toString('hex')
+
+  MAIL_HOST = "",
+  MAIL_PORT = "",
+  MAIL_USERNAME = "",
+  MAIL_PASSWORD = "",
 } = process.env;
 
+export const IN_PROD = NODE_ENV === "production";
+const IN_DEV = NODE_ENV === "development";
+const IN_TEST = NODE_ENV === "test";
+
 // Assert required variables are passed
-["SESSION_SECRET", "APP_KEY"].forEach((secret) => {
-  if (!process.env[secret]) {
+[
+  "APP_KEY",
+  IN_PROD && "APP_HOSTNAME",
+  "SESSION_SECRET",
+  !IN_TEST && "MAIL_HOST",
+  !IN_TEST && "MAIL_PORT",
+  !IN_TEST && "MAIL_USERNAME",
+  !IN_TEST && "MAIL_PASSWORD",
+].forEach((secret) => {
+  if (secret && !process.env[secret]) {
     throw new Error(`${secret} is missing from process.env`);
   }
 });
 
-export { SESSION_COOKIE, APP_PORT, APP_KEY };
-
 // App
-
-const IN_PROD = NODE_ENV === "production";
-const IN_DEV = NODE_ENV === "development";
 
 const APP_PROTOCOL = IN_PROD ? "https" : "http";
 const APP_HOST = `${APP_HOSTNAME}${IN_DEV ? `:${APP_PORT}` : ""}`;
@@ -53,6 +66,17 @@ export const SESSION_OPTS: SessionOptions = {
 
 export const BCRYPT_SALT_ROUNDS = 12;
 
-// Email verification
+// Mail
 
-export const EMAIL_EXPIRATION_DAYS = 1;
+export const MAIL_OPTS: SMTPTransport.Options = {
+  host: MAIL_HOST,
+  port: +MAIL_PORT,
+  secure: IN_PROD,
+  auth: {
+    user: MAIL_USERNAME,
+    pass: MAIL_PASSWORD,
+  },
+};
+
+export const MAIL_EXPIRATION_DAYS = 1;
+export const MAIL_FROM = `noreply@${APP_HOSTNAME}`;

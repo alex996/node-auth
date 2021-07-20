@@ -5,7 +5,7 @@ import { db, User } from "../db";
 import { sha256 } from "../utils";
 import { auth, guest } from "../middleware";
 import { SESSION_COOKIE, BCRYPT_SALT_ROUNDS } from "../config";
-import { confirmationUrl } from "./verify";
+import { confirmationEmail } from "./email";
 
 const router = Router();
 
@@ -88,8 +88,9 @@ router.post("/register", guest, validate(registerSchema), async (req, res) => {
   // Authenticate
   req.session.userId = user.id;
 
-  // TODO Send a confirmation email
-  const url = confirmationUrl(user.id);
+  // Send the email
+  const { mailer } = req.app.locals;
+  await mailer.sendMail(confirmationEmail(email, user.id));
 
   res.status(201).json({ message: "OK" });
 });

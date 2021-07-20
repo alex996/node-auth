@@ -1,13 +1,20 @@
 import t from "tap";
 import request from "supertest";
-import { app } from "../src/app";
+import { app, fakeInbox } from "../setup";
 
 t.test("/register - happy path", async (t) => {
+  const email = "alex@gmail.com";
+
   await request(app)
     .post("/register")
-    .send({ email: "alex@gmail.com", password: "123456", name: "Alex" })
+    .send({ email, password: "123456", name: "Alex" })
     .expect(201)
     .expect("Set-Cookie", /sid=.+; Expires=.+; HttpOnly; SameSite=Strict/);
+
+  t.match(
+    fakeInbox[email][0].message.html,
+    /\/email\/verify\?id=\d{1,}&expires=\d{13,}&signature=[a-z\d]{64}/
+  );
 });
 
 t.test("/register - email already taken", async (t) => {

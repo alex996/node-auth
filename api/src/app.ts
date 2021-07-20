@@ -1,4 +1,5 @@
 import "express-async-errors";
+import { Transporter } from "nodemailer";
 import express from "express";
 import helmet from "helmet";
 import session from "express-session";
@@ -7,25 +8,29 @@ import { SESSION_OPTS } from "./config";
 import { auth, verify } from "./routes";
 import { notFound, serverError } from "./middleware";
 
-const app = express();
+export const createApp = (mailer: Transporter) => {
+  const app = express();
 
-app.use(helmet());
+  app.locals.mailer = mailer;
 
-app.use(session(SESSION_OPTS));
+  app.use(helmet());
 
-app.use(express.json());
+  app.use(session(SESSION_OPTS));
 
-app.get("/", (req, res) => res.json({ message: "OK" })); // health
+  app.use(express.json());
 
-app.use(
-  auth, // login, logout, register
-  verify // email verification, resend
-);
+  app.get("/", (req, res) => res.json({ message: "OK" })); // health
 
-app.use(notFound);
+  app.use(
+    auth, // login, logout, register
+    verify // email verification, resend
+  );
 
-app.use(errors());
+  app.use(notFound);
 
-app.use(serverError);
+  app.use(errors());
 
-export { app };
+  app.use(serverError);
+
+  return app;
+};

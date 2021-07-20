@@ -9,7 +9,7 @@
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.build.json",
     "start": "NODE_ENV=production node -r source-map-support/register dist/index.js",
-    "test": "env $(grep -v '^#' .env) tap --ts --no-coverage",
+    "test": "env $(grep -v '^#' .env.test) tap --ts --no-coverage test/{*.test.ts,**/*.test.ts}",
     "test:watch": "npm run test -- -w"
   },
   "dependencies": {
@@ -20,6 +20,7 @@
     "express-async-errors": "^3.1.1",
     "express-session": "^1.17.2",
     "helmet": "^4.6.0",
+    "nodemailer": "^6.6.3",
     "source-map-support": "^0.5.19"
   },
   "devDependencies": {
@@ -27,6 +28,7 @@
     "@types/express": "^4.17.13",
     "@types/express-session": "^1.17.4",
     "@types/node": "^16.3.3",
+    "@types/nodemailer": "^6.4.4",
     "@types/supertest": "^2.0.11",
     "@types/tap": "^15.0.5",
     "supertest": "^6.1.3",

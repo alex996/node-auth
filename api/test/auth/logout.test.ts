@@ -1,6 +1,6 @@
 import t from "tap";
 import request from "supertest";
-import { app } from "../src/app";
+import { app } from "../setup";
 
 t.test("/logout - happy path", async (t) => {
   const req = await request(app)

@@ -1,10 +1,16 @@
 import { Router } from "express";
 import { createHmac } from "crypto";
 import dayjs from "dayjs";
+import { SendMailOptions } from "nodemailer";
 import { validate, verifyEmailSchema, resendEmailSchema } from "../validation";
 import { db } from "../db";
-import { safeEqual } from "../utils";
-import { EMAIL_EXPIRATION_DAYS, APP_ORIGIN, APP_KEY } from "../config";
+import { safeEqual, compress } from "../utils";
+import {
+  APP_ORIGIN,
+  APP_KEY,
+  MAIL_EXPIRATION_DAYS,
+  MAIL_FROM,
+} from "../config";
 
 const router = Router();
 
@@ -12,13 +18,6 @@ const router = Router();
 
 router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
   const { id, expires } = req.query;
-  const user = db.users.find((user) => user.id === Number(id));
-
-  if (!user || user.verifiedAt) {
-    return res
-      .status(400)
-      .json({ message: "Email is invalid or already verified" });
-  }
 
   const expectedUrl = confirmationUrl(Number(id), Number(expires));
   const actualUrl = `${APP_ORIGIN}${req.originalUrl}`;
@@ -28,7 +27,15 @@ router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
   }
 
   if (Number(expires) <= Date.now()) {
-    res.status(400).json({ message: "URL has expired" });
+    return res.status(400).json({ message: "URL has expired" });
+  }
+
+  const user = db.users.find((user) => user.id === Number(id));
+
+  if (!user || user.verifiedAt) {
+    return res
+      .status(400)
+      .json({ message: "Email is invalid or already verified" });
   }
 
   user.verifiedAt = new Date().toISOString();
@@ -38,7 +45,7 @@ router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
 
 // Email resend
 
-router.post("/email/resend", validate(resendEmailSchema), (req, res) => {
+router.post("/email/resend", validate(resendEmailSchema), async (req, res) => {
   const { email } = req.body;
   const user = db.users.find((user) => user.email === email);
 
@@ -48,7 +55,8 @@ router.post("/email/resend", validate(resendEmailSchema), (req, res) => {
       .json({ message: "Email is invalid or already verified" });
   }
 
-  // TODO resend email
+  const { mailer } = req.app.locals;
+  await mailer.sendMail(confirmationEmail(email, user.id));
 
   res.json({ message: "OK" });
 });
@@ -57,12 +65,26 @@ router.post("/email/resend", validate(resendEmailSchema), (req, res) => {
 
 export function confirmationUrl(userId: number, expiresInMs?: number) {
   expiresInMs =
-    expiresInMs || dayjs().add(EMAIL_EXPIRATION_DAYS, "day").valueOf();
+    expiresInMs || dayjs().add(MAIL_EXPIRATION_DAYS, "day").valueOf();
 
   const url = `${APP_ORIGIN}/email/verify?id=${userId}&expires=${expiresInMs}`;
   const signature = createHmac("sha256", APP_KEY).update(url).digest("hex"); // 32 * 2 = 64 chars
 
   return `${url}&signature=${signature}`;
+}
+
+export function confirmationEmail(to: string, userId: number): SendMailOptions {
+  const url = confirmationUrl(userId);
+
+  return {
+    from: MAIL_FROM,
+    to,
+    subject: "Confirm your email",
+    html: compress(`
+      <p>To verify your email, POST to the link below.</p>
+      <a href="${url}">${url}</a>
+    `), // TODO should be a link to the front-end
+  };
 }
 
 export { router as verify };
