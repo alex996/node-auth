@@ -16,6 +16,8 @@ const router = Router();
 
 // Email verification
 
+// NOTE both routes could be behind `auth` middleware in which case
+// we wouldn't need to ask for the user ID or email.
 router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
   const { id, expires } = req.query;
 
