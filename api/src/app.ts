@@ -24,7 +24,7 @@ export const createApp = (mailer: Transporter) => {
   app.use(
     auth, // login, logout, register
     email, // email verification, resend
-    password // password recovery
+    password // password recovery and confirmation
   );
 
   app.use(notFound);

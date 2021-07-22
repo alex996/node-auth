@@ -25,7 +25,7 @@ t.test("/login - invalid email (user doesn't exist)", async (t) => {
     .send({ email: "bogus@gmail.com", password: "test" })
     .expect(401);
 
-  t.equal(res.body.message, "Email or password is invalid");
+  t.equal(res.body.message, "Email or password is incorrect");
 });
 
 t.test("/login - invalid password (user does exist)", async (t) => {
@@ -34,7 +34,7 @@ t.test("/login - invalid password (user does exist)", async (t) => {
     .send({ email: "test@gmail.com", password: "wrong" })
     .expect(401);
 
-  t.equal(res.body.message, "Email or password is invalid");
+  t.equal(res.body.message, "Email or password is incorrect");
 });
 
 t.test("/login - already logged in", async (t) => {

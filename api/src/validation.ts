@@ -63,3 +63,9 @@ export const resetPasswordSchema = {
     password,
   }),
 };
+
+export const confirmPasswordSchema = {
+  [Segments.BODY]: Joi.object().keys({
+    password,
+  }),
+};

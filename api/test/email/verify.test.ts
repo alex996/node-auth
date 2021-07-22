@@ -55,7 +55,7 @@ t.test("/email/verify - invalid user ID (user doesn't exist)", async (t) => {
 
   const res = await request(app).post(url).expect(400);
 
-  t.equal(res.body.message, "Email is invalid or already verified");
+  t.equal(res.body.message, "Email is incorrect or already verified");
 });
 
 t.test("/email/verify - already verified", async (t) => {
@@ -74,5 +74,5 @@ t.test("/email/verify - already verified", async (t) => {
 
   const res = await request(app).post(link).expect(400);
 
-  t.equal(res.body.message, "Email is invalid or already verified");
+  t.equal(res.body.message, "Email is incorrect or already verified");
 });

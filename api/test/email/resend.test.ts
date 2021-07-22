@@ -30,7 +30,7 @@ t.test("/email/resend - non-existing email", async (t) => {
     .send({ email: "bogus@gmail.com" })
     .expect(400);
 
-  t.equal(res.body.message, "Email is invalid or already verified");
+  t.equal(res.body.message, "Email is incorrect or already verified");
 });
 
 t.test("/email/resend - already verified", async (t) => {
@@ -52,5 +52,5 @@ t.test("/email/resend - already verified", async (t) => {
     .send({ email })
     .expect(400);
 
-  t.equal(res.body.message, "Email is invalid or already verified");
+  t.equal(res.body.message, "Email is incorrect or already verified");
 });

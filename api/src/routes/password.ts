@@ -2,11 +2,16 @@ import { Router } from "express";
 import { randomBytes } from "crypto";
 import dayjs from "dayjs";
 import { SendMailOptions } from "nodemailer";
-import { guest } from "../middleware";
-import { validate, sendResetSchema, resetPasswordSchema } from "../validation";
+import { guest, auth } from "../middleware";
+import {
+  validate,
+  sendResetSchema,
+  resetPasswordSchema,
+  confirmPasswordSchema,
+} from "../validation";
 import { db } from "../db";
 import { hmacSha256, compress } from "../utils";
-import { hashPassword } from "./auth";
+import { hashPassword, comparePassword } from "./auth";
 import {
   APP_KEY,
   PWD_RESET_TOKEN_BYTES,
@@ -16,6 +21,8 @@ import {
 } from "../config";
 
 const router = Router();
+
+// Password reset request
 
 router.post(
   "/password/email",
@@ -54,6 +61,8 @@ router.post(
   }
 );
 
+// Password reset submission
+
 router.post(
   "/password/reset",
   guest,
@@ -67,14 +76,12 @@ router.post(
       (reset) => reset.userId === Number(id) && reset.token === hashedToken
     );
 
-    const user = db.users.find((user) => user.id === Number(id));
-
-    // Technically, if the reset token is found, the user itself
-    // must also exist. But we're being extra defensivive here.
-    if (!resetToken || !user) {
+    if (!resetToken) {
       return res.status(401).json({ message: "Token or ID is invalid" });
     }
 
+    const user = db.users.find((user) => user.id === Number(id));
+    if (!user) throw new Error(`User id = ${id} not found`); // unreachable
     user.password = await hashPassword(password);
 
     // Invalidate all user reset tokens
@@ -85,6 +92,38 @@ router.post(
     res.json({ message: "OK" });
   }
 );
+
+// Password confirmation
+
+router.post(
+  "/password/confirm",
+  auth,
+  validate(confirmPasswordSchema),
+  async (req, res) => {
+    const { password } = req.body;
+    const { userId } = req.session;
+
+    const user = db.users.find((user) => user.id === userId);
+    if (!user) throw new Error(`User id = ${userId} not found`); // unreachable
+
+    // NOTE although we apply `auth` middleware, we still safeguard
+    // against a timing attack in case the session is hijacked.
+    const fakeHash =
+      "$2b$12$j5V3RyLko4Gpx.IStt8ux.WN95F3n3fULUyhBINe4zbME.L7C1h7C";
+    const pwdHash = user?.password || fakeHash;
+    const pwdMatches = await comparePassword(password, pwdHash);
+
+    if (!pwdMatches) {
+      return res.status(401).json({ message: "Password is incorrect" });
+    }
+
+    req.session.confirmedAt = Date.now();
+
+    res.json({ message: "OK" });
+  }
+);
+
+// Utils
 
 function passwordResetEmail(
   to: string,

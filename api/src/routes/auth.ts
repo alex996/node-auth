@@ -26,11 +26,7 @@ router.post("/login", validate(loginSchema), async (req, res) => {
   const fakeHash =
     "$2b$12$tLn0rFkPBoE1WCpdM6MjR.t/h6Wzql1kAd27FecEDtjRYsTFlYlWa"; // 'test'
   const pwdHash = user?.password || fakeHash;
-  // NOTE bcrypt truncates the input string after 72 bytes, meaning
-  // you can still log in with just the first 72 bytes of your password.
-  // To prevent this, we prehash plaintext passwords before running them
-  // through bcrypt. https://security.stackexchange.com/q/6623
-  const pwdMatches = await compare(sha256(password), pwdHash);
+  const pwdMatches = await comparePassword(password, pwdHash);
 
   // NOTE bcrypt's compare() is *not* timing-safe
   // https://github.com/kelektiv/node.bcrypt.js/issues/720
@@ -40,7 +36,7 @@ router.post("/login", validate(loginSchema), async (req, res) => {
   if (!user || !pwdMatches) {
     // Return 401 for invalid creds https://stackoverflow.com/a/32752617
     return res.status(401).json({
-      message: "Email or password is invalid",
+      message: "Email or password is incorrect",
     });
   }
 
@@ -95,12 +91,21 @@ router.post("/register", guest, validate(registerSchema), async (req, res) => {
   res.status(201).json({ message: "OK" });
 });
 
-// SHA256 always produces a string that's 256 bits (or 32 bytes) long.
-// In base64, that's ceil(32 / 3) * 4 = 44 characters long.
-const sha256 = (plaintext: string) =>
-  createHash("sha256").update(plaintext).digest("base64");
+// Utils
+
+// NOTE bcrypt truncates the input string after 72 bytes, meaning
+// you can still log in with just the first 72 bytes of your password.
+// To prevent this, we prehash plaintext passwords before running them
+// through bcrypt. https://security.stackexchange.com/q/6623
+export const comparePassword = (plaintextPassword: string, hash: string) =>
+  compare(sha256(plaintextPassword), hash);
 
 export const hashPassword = (plaintextPassword: string) =>
   hash(sha256(plaintextPassword), BCRYPT_SALT_ROUNDS);
+
+// NOTE SHA256 always produces a string that's 256 bits (or 32 bytes) long.
+// In base64, that's ceil(32 / 3) * 4 = 44 bytes which meets the 72 byte limit.
+const sha256 = (plaintext: string) =>
+  createHash("sha256").update(plaintext).digest("base64");
 
 export { router as auth };

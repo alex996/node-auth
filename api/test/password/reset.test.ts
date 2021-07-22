@@ -83,7 +83,7 @@ t.test("/password/reset - invalid user ID", async (t) => {
   t.equal(res.body.message, "Token or ID is invalid");
 });
 
-t.test("/password/email - token invalidation", async (t) => {
+t.test("/password/verify - token invalidation", async (t) => {
   const email = "tim@gmail.com";
 
   await request(app)

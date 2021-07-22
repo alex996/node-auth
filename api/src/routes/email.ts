@@ -1,10 +1,9 @@
 import { Router } from "express";
-import { createHmac } from "crypto";
 import dayjs from "dayjs";
 import { SendMailOptions } from "nodemailer";
 import { validate, verifyEmailSchema, resendEmailSchema } from "../validation";
 import { db } from "../db";
-import { safeEqual, compress } from "../utils";
+import { safeEqual, hmacSha256, compress } from "../utils";
 import {
   APP_ORIGIN,
   APP_KEY,
@@ -37,7 +36,7 @@ router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
   if (!user || user.verifiedAt) {
     return res
       .status(400)
-      .json({ message: "Email is invalid or already verified" });
+      .json({ message: "Email is incorrect or already verified" });
   }
 
   user.verifiedAt = new Date().toISOString();
@@ -54,7 +53,7 @@ router.post("/email/resend", validate(resendEmailSchema), async (req, res) => {
   if (!user || user.verifiedAt) {
     return res
       .status(400)
-      .json({ message: "Email is invalid or already verified" });
+      .json({ message: "Email is incorrect or already verified" });
   }
 
   const { mailer } = req.app.locals;
@@ -70,7 +69,7 @@ export function confirmationUrl(userId: number, expiresInMs?: number) {
     expiresInMs || dayjs().add(MAIL_EXPIRATION_DAYS, "day").valueOf();
 
   const url = `${APP_ORIGIN}/email/verify?id=${userId}&expires=${expiresInMs}`;
-  const signature = createHmac("sha256", APP_KEY).update(url).digest("hex"); // 32 * 2 = 64 chars
+  const signature = hmacSha256(url, APP_KEY); // 256 bits = 32 bytes, 32 * 2 = 64 chars
 
   return `${url}&signature=${signature}`;
 }
