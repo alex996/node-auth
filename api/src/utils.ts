@@ -1,4 +1,4 @@
-import { timingSafeEqual, createHash } from "crypto";
+import { timingSafeEqual, createHash, createHmac } from "crypto";
 
 // Crypto
 
@@ -13,11 +13,13 @@ export const safeEqual = (a: string, b: string) => {
   return aBuff.length === bBuff.length && timingSafeEqual(aBuff, bBuff);
 };
 
-export const sha256 = (plaintext: string) => {
-  // SHA256 always produces a string that's 256 bits (or 32 bytes) long.
-  // In base64, that's ceil(32 / 3) * 4 = 44 characters long.
-  return createHash("sha256").update(plaintext).digest("base64");
-};
+// SHA256 always produces a string that's 256 bits (or 32 bytes) long.
+// In base64, that's ceil(32 / 3) * 4 = 44 characters long.
+export const sha256 = (plaintext: string) =>
+  createHash("sha256").update(plaintext).digest("base64");
+
+export const hmacSha256 = (plaintext: string, key: string) =>
+  createHmac("sha256", key).update(plaintext).digest("hex");
 
 // String
 

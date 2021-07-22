@@ -87,4 +87,4 @@ export function confirmationEmail(to: string, userId: number): SendMailOptions {
   };
 }
 
-export { router as verify };
+export { router as email };

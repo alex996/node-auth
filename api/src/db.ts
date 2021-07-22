@@ -8,10 +8,12 @@ export const db: Db = {
       verifiedAt: null,
     },
   ],
+  passwordResets: [],
 };
 
 interface Db {
   users: User[];
+  passwordResets: PasswordReset[];
 }
 
 export interface User {
@@ -20,4 +22,10 @@ export interface User {
   password: string;
   name: string;
   verifiedAt: string | null;
+}
+
+export interface PasswordReset {
+  id: number;
+  token: string;
+  expiresAt: string;
 }

@@ -1,4 +1,5 @@
 import { RequestHandler, ErrorRequestHandler } from "express";
+import { db } from "./db";
 
 // https://expressjs.com/en/starter/faq.html#how-do-i-handle-404-responses
 
@@ -28,6 +29,17 @@ export const auth: RequestHandler = (req, res, next) => {
 
 export const guest: RequestHandler = (req, res, next) => {
   if (req.session.userId) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  next();
+};
+
+export const verified: RequestHandler = (req, res, next) => {
+  const { userId } = req.session;
+  const { verifiedAt } = db.users.find((user) => user.id === userId) || {};
+
+  if (!verifiedAt) {
     return res.status(403).json({ message: "Forbidden" });
   }
 

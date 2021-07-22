@@ -17,6 +17,15 @@ t.test("/register - happy path", async (t) => {
   );
 });
 
+t.test("/register - missing body", async (t) => {
+  const res = await request(app).post("/register").expect(400);
+
+  t.equal(
+    res.body.validation.body.message,
+    '"email" is required. "password" is required. "name" is required'
+  );
+});
+
 t.test("/register - email already taken", async (t) => {
   const res = await request(app)
     .post("/register")

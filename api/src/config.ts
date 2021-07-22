@@ -80,3 +80,7 @@ export const MAIL_OPTS: SMTPTransport.Options = {
 
 export const MAIL_EXPIRATION_DAYS = 1;
 export const MAIL_FROM = `noreply@${APP_HOSTNAME}`;
+
+// Passwords
+
+export const PWD_RESET_EXPIRATION_DAYS = 1;
