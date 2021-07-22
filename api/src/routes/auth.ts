@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { compare, hash } from "bcrypt";
+import { createHash } from "crypto";
 import { validate, loginSchema, registerSchema } from "../validation";
 import { db, User } from "../db";
-import { sha256 } from "../utils";
 import { auth, guest } from "../middleware";
 import { SESSION_COOKIE, BCRYPT_SALT_ROUNDS } from "../config";
 import { confirmationEmail } from "./email";
@@ -79,7 +79,7 @@ router.post("/register", guest, validate(registerSchema), async (req, res) => {
   const user: User = {
     id: db.users.length + 1,
     email,
-    password: await hash(sha256(password), BCRYPT_SALT_ROUNDS),
+    password: await hashPassword(password),
     name,
     verifiedAt: null,
   };
@@ -94,5 +94,13 @@ router.post("/register", guest, validate(registerSchema), async (req, res) => {
 
   res.status(201).json({ message: "OK" });
 });
+
+// SHA256 always produces a string that's 256 bits (or 32 bytes) long.
+// In base64, that's ceil(32 / 3) * 4 = 44 characters long.
+const sha256 = (plaintext: string) =>
+  createHash("sha256").update(plaintext).digest("base64");
+
+export const hashPassword = (plaintextPassword: string) =>
+  hash(sha256(plaintextPassword), BCRYPT_SALT_ROUNDS);
 
 export { router as auth };

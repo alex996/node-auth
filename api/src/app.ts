@@ -5,7 +5,7 @@ import helmet from "helmet";
 import session from "express-session";
 import { errors } from "celebrate";
 import { SESSION_OPTS } from "./config";
-import { auth, email } from "./routes";
+import { auth, email, password } from "./routes";
 import { notFound, serverError } from "./middleware";
 
 export const createApp = (mailer: Transporter) => {
@@ -23,7 +23,8 @@ export const createApp = (mailer: Transporter) => {
 
   app.use(
     auth, // login, logout, register
-    email // email verification, resend
+    email, // email verification, resend
+    password // password recovery
   );
 
   app.use(notFound);

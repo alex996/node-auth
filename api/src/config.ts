@@ -83,4 +83,5 @@ export const MAIL_FROM = `noreply@${APP_HOSTNAME}`;
 
 // Passwords
 
-export const PWD_RESET_EXPIRATION_DAYS = 1;
+export const PWD_RESET_TOKEN_BYTES = 40;
+export const PWD_RESET_EXPIRATION_HOURS = 12;

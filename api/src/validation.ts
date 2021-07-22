@@ -1,9 +1,15 @@
-import { celebrate, SchemaOptions, Segments, Joi } from "celebrate";
+import { celebrate, SchemaOptions, Modes, Segments, Joi } from "celebrate";
 
 export const validate = (schema: SchemaOptions) =>
-  celebrate(schema, {
-    abortEarly: false,
-  });
+  celebrate(
+    schema,
+    {
+      abortEarly: false, // validate all fields in the segment
+    },
+    {
+      mode: Modes.FULL, // validate all segments (body, query, etc.)
+    }
+  );
 
 const email = Joi.string().email().required();
 

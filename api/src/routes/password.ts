@@ -1,16 +1,16 @@
 import { Router } from "express";
 import { randomBytes } from "crypto";
 import dayjs from "dayjs";
-import { hash } from "bcrypt";
 import { SendMailOptions } from "nodemailer";
 import { guest } from "../middleware";
 import { validate, sendResetSchema, resetPasswordSchema } from "../validation";
 import { db } from "../db";
-import { hmacSha256, sha256, compress } from "../utils";
+import { hmacSha256, compress } from "../utils";
+import { hashPassword } from "./auth";
 import {
   APP_KEY,
-  PWD_RESET_EXPIRATION_DAYS,
-  BCRYPT_SALT_ROUNDS,
+  PWD_RESET_TOKEN_BYTES,
+  PWD_RESET_EXPIRATION_HOURS,
   APP_ORIGIN,
   MAIL_FROM,
 } from "../config";
@@ -33,9 +33,9 @@ router.post(
       });
     }
 
-    const token = randomBytes(40).toString("hex");
+    const token = randomBytes(PWD_RESET_TOKEN_BYTES).toString("hex");
     const expiresAt = dayjs()
-      .add(PWD_RESET_EXPIRATION_DAYS, "day")
+      .add(PWD_RESET_EXPIRATION_HOURS, "hour")
       .toISOString();
 
     // NOTE we treat reset tokens like passwords, so we don't store
@@ -67,15 +67,15 @@ router.post(
       (reset) => reset.userId === Number(id) && reset.token === hashedToken
     );
 
-    const user = db.users.find((user) => user.id === user.id);
+    const user = db.users.find((user) => user.id === Number(id));
 
     // Technically, if the reset token is found, the user itself
     // must also exist. But we're being extra defensivive here.
     if (!resetToken || !user) {
-      return res.status(401).json({ message: "Token is invalid" });
+      return res.status(401).json({ message: "Token or ID is invalid" });
     }
 
-    user.password = await hash(sha256(password), BCRYPT_SALT_ROUNDS);
+    user.password = await hashPassword(password);
 
     // Invalidate all user reset tokens
     db.passwordResets = db.passwordResets.filter(
@@ -91,7 +91,7 @@ function passwordResetEmail(
   token: string,
   userId: number
 ): SendMailOptions {
-  const url = `${APP_ORIGIN}/password/reset?token=${token}&id=${userId}`;
+  const url = `${APP_ORIGIN}/password/reset?id=${userId}&token=${token}`;
   return {
     from: MAIL_FROM,
     to,
