@@ -10,7 +10,7 @@ import {
   confirmPasswordSchema,
 } from "../validation";
 import { db } from "../db";
-import { hmacSha256, compress } from "../utils";
+import { hmacSha256, safeEqual, compress } from "../utils";
 import { hashPassword, comparePassword } from "./auth";
 import {
   APP_KEY,
@@ -73,7 +73,8 @@ router.post(
 
     const hashedToken = hmacSha256(String(token), APP_KEY);
     const resetToken = db.passwordResets.find(
-      (reset) => reset.userId === Number(id) && reset.token === hashedToken
+      (reset) =>
+        reset.userId === Number(id) && safeEqual(reset.token, hashedToken)
     );
 
     if (!resetToken) {
