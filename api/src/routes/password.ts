@@ -106,12 +106,7 @@ router.post(
     const user = db.users.find((user) => user.id === userId);
     if (!user) throw new Error(`User id = ${userId} not found`); // unreachable
 
-    // NOTE although we apply `auth` middleware, we still safeguard
-    // against a timing attack in case the session is hijacked.
-    const fakeHash =
-      "$2b$12$j5V3RyLko4Gpx.IStt8ux.WN95F3n3fULUyhBINe4zbME.L7C1h7C";
-    const pwdHash = user?.password || fakeHash;
-    const pwdMatches = await comparePassword(password, pwdHash);
+    const pwdMatches = await comparePassword(password, user.password);
 
     if (!pwdMatches) {
       return res.status(401).json({ message: "Password is incorrect" });
