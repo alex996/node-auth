@@ -5,7 +5,7 @@ import { app, fakeInbox } from "../setup";
 t.test("/register - happy path", async (t) => {
   const email = "alex@gmail.com";
 
-  await request(app)
+  const res = await request(app)
     .post("/register")
     .send({ email, password: "123456", name: "Alex" })
     .expect(201)
@@ -15,6 +15,10 @@ t.test("/register - happy path", async (t) => {
     fakeInbox[email][0].message.html,
     /\/email\/verify\?id=\d{1,}&expires=\d{13,}&signature=[a-z\d]{64}/
   );
+
+  const cookie = res.headers["set-cookie"][0].split(/;/, 1)[0];
+
+  await request(app).get("/me").set("Cookie", [cookie]).expect(200);
 });
 
 t.test("/register - missing body", async (t) => {

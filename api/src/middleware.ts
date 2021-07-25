@@ -1,5 +1,6 @@
 import { RequestHandler, ErrorRequestHandler } from "express";
 import { db } from "./db";
+import { PWD_CONFIRM_EXPIRES_IN_MS } from "./config";
 
 // https://expressjs.com/en/starter/faq.html#how-do-i-handle-404-responses
 
@@ -40,6 +41,16 @@ export const verified: RequestHandler = (req, res, next) => {
   const { verifiedAt } = db.users.find((user) => user.id === userId) || {};
 
   if (!verifiedAt) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  next();
+};
+
+export const pwdConfirmed: RequestHandler = (req, res, next) => {
+  const { confirmedAt } = req.session;
+
+  if (!confirmedAt || confirmedAt + PWD_CONFIRM_EXPIRES_IN_MS <= Date.now()) {
     return res.status(403).json({ message: "Forbidden" });
   }
 

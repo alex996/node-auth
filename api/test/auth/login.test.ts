@@ -3,11 +3,15 @@ import request from "supertest";
 import { app } from "../setup";
 
 t.test("/login - happy path", async (t) => {
-  await request(app)
+  const res = await request(app)
     .post("/login")
     .send({ email: "test@gmail.com", password: "test" })
     .expect(200)
     .expect("Set-Cookie", /sid=.+; Expires=.+; HttpOnly; SameSite=Strict/);
+
+  const cookie = res.headers["set-cookie"][0].split(/;/, 1)[0];
+
+  await request(app).get("/me").set("Cookie", [cookie]).expect(200);
 });
 
 t.test("/login - missing credentials", async (t) => {

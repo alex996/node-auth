@@ -78,10 +78,11 @@ export const MAIL_OPTS: SMTPTransport.Options = {
   },
 };
 
-export const MAIL_EXPIRATION_DAYS = 1;
+export const MAIL_EXPIRES_IN_DAYS = 1;
 export const MAIL_FROM = `noreply@${APP_HOSTNAME}`;
 
 // Passwords
 
 export const PWD_RESET_TOKEN_BYTES = 40;
-export const PWD_RESET_EXPIRATION_HOURS = 12;
+export const PWD_RESET_EXPIRES_IN_HOURS = 12;
+export const PWD_CONFIRM_EXPIRES_IN_MS = 2 * ONE_HOUR_IN_MS;

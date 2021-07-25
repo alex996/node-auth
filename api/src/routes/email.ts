@@ -7,7 +7,7 @@ import { safeEqual, hmacSha256, compress } from "../utils";
 import {
   APP_ORIGIN,
   APP_KEY,
-  MAIL_EXPIRATION_DAYS,
+  MAIL_EXPIRES_IN_DAYS,
   MAIL_FROM,
 } from "../config";
 
@@ -66,7 +66,7 @@ router.post("/email/resend", validate(resendEmailSchema), async (req, res) => {
 
 export function confirmationUrl(userId: number, expiresInMs?: number) {
   expiresInMs =
-    expiresInMs || dayjs().add(MAIL_EXPIRATION_DAYS, "day").valueOf();
+    expiresInMs || dayjs().add(MAIL_EXPIRES_IN_DAYS, "day").valueOf();
 
   const url = `${APP_ORIGIN}/email/verify?id=${userId}&expires=${expiresInMs}`;
   const signature = hmacSha256(url, APP_KEY); // 256 bits = 32 bytes, 32 * 2 = 64 chars

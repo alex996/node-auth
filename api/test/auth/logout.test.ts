@@ -14,6 +14,8 @@ t.test("/logout - happy path", async (t) => {
     .set("Cookie", [cookie])
     .expect(200)
     .expect("Set-Cookie", /sid=;/);
+
+  await request(app).get("/me").set("Cookie", [cookie]).expect(401);
 });
 
 t.test("/logout - not logged in", async (t) => {

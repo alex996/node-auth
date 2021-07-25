@@ -15,7 +15,7 @@ import { hashPassword, comparePassword } from "./auth";
 import {
   APP_KEY,
   PWD_RESET_TOKEN_BYTES,
-  PWD_RESET_EXPIRATION_HOURS,
+  PWD_RESET_EXPIRES_IN_HOURS,
   APP_ORIGIN,
   MAIL_FROM,
 } from "../config";
@@ -42,7 +42,7 @@ router.post(
 
     const token = randomBytes(PWD_RESET_TOKEN_BYTES).toString("hex");
     const expiresAt = dayjs()
-      .add(PWD_RESET_EXPIRATION_HOURS, "hour")
+      .add(PWD_RESET_EXPIRES_IN_HOURS, "hour")
       .toISOString();
 
     // NOTE we treat reset tokens like passwords, so we don't store

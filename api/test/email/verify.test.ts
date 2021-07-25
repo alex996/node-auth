@@ -3,12 +3,10 @@ import request from "supertest";
 import { app, fakeInbox } from "../setup";
 import { confirmationUrl } from "../../src/routes";
 
-// TODO assert user.verifiedAt (ex: against users collection or visiting a `verified` URL)
-
 t.test("/email/verify - happy path", async (t) => {
   const email = "jake@gmail.com";
 
-  await request(app)
+  const register = await request(app)
     .post("/register")
     .send({ email, password: "123456", name: "Jake" })
     .expect(201);
@@ -18,6 +16,10 @@ t.test("/email/verify - happy path", async (t) => {
   );
 
   await request(app).post(link).expect(200);
+
+  const cookie = register.headers["set-cookie"][0].split(/;/, 1)[0];
+
+  await request(app).get("/me/verified").set("Cookie", [cookie]).expect(200);
 });
 
 t.test("/email/verify - missing params", async (t) => {

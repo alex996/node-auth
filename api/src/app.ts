@@ -5,7 +5,7 @@ import helmet from "helmet";
 import session from "express-session";
 import { errors } from "celebrate";
 import { SESSION_OPTS } from "./config";
-import { auth, email, password } from "./routes";
+import { demo, auth, email, password } from "./routes";
 import { notFound, serverError } from "./middleware";
 
 export const createApp = (mailer: Transporter) => {
@@ -19,9 +19,8 @@ export const createApp = (mailer: Transporter) => {
 
   app.use(express.json());
 
-  app.get("/", (req, res) => res.json({ message: "OK" })); // health
-
   app.use(
+    demo, // sample routes to test middleware
     auth, // login, logout, register
     email, // email verification, resend
     password // password recovery and confirmation

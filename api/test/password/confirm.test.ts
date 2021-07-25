@@ -18,7 +18,7 @@ t.test("/password/confirm - happy path", async (t) => {
     .send({ password })
     .expect(200);
 
-  // TODO access pwd protected route
+  await request(app).get("/me/confirmed").set("Cookie", [cookie]).expect(200);
 });
 
 t.test("/password/confirm - guest (unauthorized)", async (t) => {
