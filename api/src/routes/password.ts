@@ -13,7 +13,7 @@ import { db } from "../db";
 import { hmacSha256, safeEqual, compress } from "../utils";
 import { hashPassword, comparePassword } from "./auth";
 import {
-  APP_KEY,
+  APP_SECRET,
   PWD_RESET_TOKEN_BYTES,
   PWD_RESET_EXPIRES_IN_HOURS,
   APP_ORIGIN,
@@ -50,7 +50,7 @@ router.post(
     db.passwordResets.push({
       id: db.passwordResets.length + 1,
       userId: user.id,
-      token: hmacSha256(token, APP_KEY),
+      token: hmacSha256(token, APP_SECRET),
       expiresAt,
     });
 
@@ -71,7 +71,7 @@ router.post(
     const { token, id } = req.query;
     const { password } = req.body;
 
-    const hashedToken = hmacSha256(String(token), APP_KEY);
+    const hashedToken = hmacSha256(String(token), APP_SECRET);
     const resetToken = db.passwordResets.find(
       (reset) =>
         reset.userId === Number(id) && safeEqual(reset.token, hashedToken)

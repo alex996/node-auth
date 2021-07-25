@@ -6,10 +6,12 @@ export const {
 
   APP_PORT = 3000,
   APP_HOSTNAME = "localhost",
-  APP_KEY = "", // crypto.randomBytes(32).toString('base64')
+  // NOTE APP_SECRET is used to sign the session ID cookie,
+  // the email verification URL, and the password reset token.
+  // It may be prudent to use different secrets for each.
+  APP_SECRET = "", // crypto.randomBytes(32).toString('base64')
 
   SESSION_COOKIE = "sid",
-  SESSION_SECRET = "", // crypto.randomBytes(16).toString('hex')
 
   MAIL_HOST = "",
   MAIL_PORT = "",
@@ -23,9 +25,8 @@ const IN_TEST = NODE_ENV === "test";
 
 // Assert required variables are passed
 [
-  "APP_KEY",
+  "APP_SECRET",
   IN_PROD && "APP_HOSTNAME",
-  "SESSION_SECRET",
   !IN_TEST && "MAIL_HOST",
   !IN_TEST && "MAIL_PORT",
   !IN_TEST && "MAIL_USERNAME",
@@ -59,7 +60,7 @@ export const SESSION_OPTS: SessionOptions = {
   resave: false, // whether to save the session if it wasn't modified during the request
   rolling: true, // whether to (re-)set cookie on every response
   saveUninitialized: false, // whether to save empty sessions to the store
-  secret: SESSION_SECRET,
+  secret: APP_SECRET,
 };
 
 // Bcrypt

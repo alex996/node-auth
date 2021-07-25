@@ -6,7 +6,7 @@ import { db } from "../db";
 import { safeEqual, hmacSha256, compress } from "../utils";
 import {
   APP_ORIGIN,
-  APP_KEY,
+  APP_SECRET,
   MAIL_EXPIRES_IN_DAYS,
   MAIL_FROM,
 } from "../config";
@@ -69,7 +69,7 @@ export function confirmationUrl(userId: number, expiresInMs?: number) {
     expiresInMs || dayjs().add(MAIL_EXPIRES_IN_DAYS, "day").valueOf();
 
   const url = `${APP_ORIGIN}/email/verify?id=${userId}&expires=${expiresInMs}`;
-  const signature = hmacSha256(url, APP_KEY); // 256 bits = 32 bytes, 32 * 2 = 64 chars
+  const signature = hmacSha256(url, APP_SECRET); // 256 bits = 32 bytes, 32 * 2 = 64 chars
 
   return `${url}&signature=${signature}`;
 }

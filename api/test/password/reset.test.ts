@@ -101,7 +101,7 @@ t.test("/password/verify - token invalidation", async (t) => {
 
   const password = "789012";
 
-  await request(app).post(link1).send({ password }).expect(200);
+  await request(app).post(link1).send({ password }).expect(200); // older token still works
 
   const res = await request(app).post(link2).send({ password }).expect(401);
 
