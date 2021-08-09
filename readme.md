@@ -32,11 +32,11 @@ $ node
 > require('crypto').randomBytes(32).toString('base64')
 ```
 
-Make sure to also populate `MAIL_*` variables. You can sign up a free service like [Mailtrap](https://mailtrap.io/) or [Ethereal](https://ethereal.email/). With Ethereal, you can create an account right from your terminal:
+Make sure to also populate `MAIL_*` variables. For example, you can sign up for a free service like [Mailtrap](https://mailtrap.io/) or [Ethereal](https://ethereal.email/). Using Ethereal you can even create an account right from your terminal:
 
 ```js
 $ node
-require('nodemailer').createTestAccount().then(console.log)
+> require('nodemailer').createTestAccount().then(console.log)
 ```
 
 Finally, boot the server:
@@ -73,15 +73,20 @@ npm test
 ```sh
 # Auth
 
-curl -d '{"email":"test@gmail.com","password":"test"}' -H 'Content-Type: application/json' localhost:3000/login
+curl -d '{"email":"test@gmail.com","password":"test"}' -H 'Content-Type: application/json' \
+  localhost:3000/login
 
-curl -X POST -b 'sid=s%3AT_Pkrw6AvSQ3LfOYC9q0EnE1uqWQhJbp.hTs%2BqXXHbFMn2dxgSKBWd%2F%2FEQ8xwnV3KKsA9IwVJ7nU' localhost:3000/logout
+curl -X POST \
+  -b 'sid=s%3AT_Pkrw6AvSQ3LfOYC9q0EnE1uqWQhJbp.hTs%2BqXXHbFMn2dxgSKBWd%2F%2FEQ8xwnV3KKsA9IwVJ7nU' \
+  localhost:3000/logout
 
-curl -d '{"email":"alex@gmail.com","password":"test","name":"Alex"}' -H 'Content-Type: application/json' localhost:3000/register
+curl -d '{"email":"alex@gmail.com","password":"test","name":"Alex"}' \
+  -H 'Content-Type: application/json' localhost:3000/register
 
 # Email verification
 
-curl -X POST 'localhost:3000/email/verify?id=2&expires=1626766452957&signature=ddd8e0451ef93172b5345e0f7d1e8a5e85b69bca2b2aeed80a14848d0d2fb2df'
+curl -X POST \
+  'localhost:3000/email/verify?id=2&expires=1626766452957&signature=ddd8e0451ef93172b5345e0f7d1e8a5e85b69bca2b2aeed80a14848d0d2fb2df'
 
 curl -d '{"email":"alex@gmail.com"}' -H 'Content-Type: application/json' localhost:3000/email/resend
 
@@ -89,11 +94,14 @@ curl -d '{"email":"alex@gmail.com"}' -H 'Content-Type: application/json' localho
 
 curl -d '{"email":"alex@gmail.com"}' -H 'Content-Type: application/json' localhost:3000/password/email
 
-curl -d '{"password":"123456"}' -H 'Content-Type: application/json' 'localhost:3000/password/reset?id=2&token=78f3065ed0b350b1ee1ea80162c2e2f4908fb5bc9d42c22e08202d2e79a0d180a59a86bf9885a002'
+curl -d '{"password":"123456"}' -H 'Content-Type: application/json' \
+  'localhost:3000/password/reset?id=2&token=78f3065ed0b350b1ee1ea80162c2e2f4908fb5bc9d42c22e08202d2e79a0d180a59a86bf9885a002'
 
 # Password confirmation
 
-curl -d '{"password":"test"}' -b 'sid=s%3AT_Pkrw6AvSQ3LfOYC9q0EnE1uqWQhJbp.hTs%2BqXXHbFMn2dxgSKBWd%2F%2FEQ8xwnV3KKsA9IwVJ7nU' localhost:3000/password/confirm
+curl -d '{"password":"test"}' \
+  -b 'sid=s%3AT_Pkrw6AvSQ3LfOYC9q0EnE1uqWQhJbp.hTs%2BqXXHbFMn2dxgSKBWd%2F%2FEQ8xwnV3KKsA9IwVJ7nU' \
+  localhost:3000/password/confirm
 ```
 
 ## Disclaimer
