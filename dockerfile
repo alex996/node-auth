@@ -1,3 +1,4 @@
+#docker file
 FROM node:14
 WORKDIR /usr/src/app
 COPY ./api/package*.json ./
