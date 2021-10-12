@@ -1,0 +1,14 @@
+###
+POST http://localhost:8888/register HTTP/1.1
+content-type: application/json
+
+{
+    "email": "azees.math@gmail.com",
+    "name": "alex",
+    "password": "Jdepro123",
+    "passwordConfirmation": "Jdepro123"
+}
+
+###
+GET http://localhost:8888/home HTTP/1.1
+content-type: application/json
