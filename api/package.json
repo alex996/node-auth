@@ -15,6 +15,7 @@
     "@hapi/joi": "^16.1.8",
     "bcryptjs": "^2.4.3",
     "connect-redis": "^4.0.3",
+    "dotenv": "^10.0.0",
     "express": "^4.17.1",
     "express-session": "^1.17.0",
     "ioredis": "^4.14.1",
