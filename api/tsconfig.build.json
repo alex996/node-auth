@@ -1,3 +1,5 @@
+/* Eventually, this should work: tsc --rootDir src --exclude test */
+/* https://github.com/microsoft/TypeScript/issues/46005 */
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {

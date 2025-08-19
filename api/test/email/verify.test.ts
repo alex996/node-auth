@@ -1,80 +1,126 @@
-import t from "tap";
-import request from "supertest";
-import { app, fakeInbox } from "../setup";
-import { confirmationUrl } from "../../src/routes";
+import assert from "node:assert";
+import test, { before, describe } from "node:test";
+import { LINK_EXPIRES_IN_HRS } from "../../src/config.js";
+import { addHours, signUrl, verificationUrl } from "../../src/routes/email.js";
+import {
+  createTestUser,
+  fakeInbox,
+  getCookie,
+  sleep,
+  testAgent,
+  testCookie,
+} from "../setup.js";
 
-t.test("/email/verify - happy path", async (t) => {
-  const email = "jake@gmail.com";
+describe("POST /email/verify", () => {
+  before(createTestUser);
 
-  const register = await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Jake" })
-    .expect(201);
+  test("happy path", async () => {
+    const email = "mike@example.com";
+    const registerRes = await testAgent
+      .post("/register")
+      .send({ name: "Mike", email, password: "test" });
+    const cookie = getCookie(registerRes)!;
+    assert.strictEqual(registerRes.body.verified_at, null);
 
-  const [, link] = fakeInbox[email][0].message.html.match(
-    /<a href="http:\/\/localhost(.+)">/
-  );
+    await sleep(5); // until the email is sent
 
-  await request(app).post(link).expect(200);
+    const unverifiedRes = await testAgent
+      .get("/me/verified")
+      .set("Cookie", [cookie]);
+    assert.strictEqual(unverifiedRes.status, 403);
+    assert.strictEqual(unverifiedRes.body.message, "Forbidden");
 
-  const cookie = register.headers["set-cookie"][0].split(/;/, 1)[0];
+    const [, , expiredAt, signature] = fakeInbox[email]![0]!.message.html.match(
+      /id=(\d{1,})&expiredAt=(\d{13,})&signature=([\w\-]{43})/
+    );
+    const res = await testAgent
+      .post("/email/verify")
+      .set("Cookie", [cookie])
+      .send({ expiredAt: +expiredAt, signature });
+    assert.strictEqual(res.status, 200);
+    assert.ok(typeof res.body === "number");
 
-  await request(app).get("/me/verified").set("Cookie", [cookie]).expect(200);
-});
+    const verifiedRes = await testAgent
+      .get("/me/verified")
+      .set("Cookie", [cookie]);
+    assert.strictEqual(verifiedRes.status, 200);
+  });
 
-t.test("/email/verify - missing params", async (t) => {
-  const res = await request(app).post("/email/verify").expect(400);
+  test("not logged in", async () => {
+    const res = await testAgent.post("/email/verify");
 
-  t.equal(
-    res.body.validation.query.message,
-    '"id" is required. "expires" is required. "signature" is required'
-  );
-});
+    assert.strictEqual(res.status, 401);
+    assert.strictEqual(res.body.message, "Unauthorized");
+  });
 
-t.test("/email/verify - tampered URL", async (t) => {
-  const url = confirmationUrl(1).replace(
-    /http:\/\/localhost(.+expires)=\d*(.+)/,
-    "$1=1626737260105$2" // custom expiration timestamp
-  );
+  test("empty body", async () => {
+    const res = await testAgent
+      .post("/email/verify")
+      .set("Cookie", [testCookie])
+      .send({});
 
-  const res = await request(app).post(url).expect(400);
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(Object.keys(res.body.body), [
+      "_errors",
+      "expiredAt",
+      "signature",
+    ]);
+  });
 
-  t.equal(res.body.message, "URL is invalid");
-});
+  const signatureRegex = /signature=(.+)$/;
 
-t.test("/email/verify - expired URL", async (t) => {
-  const [, url] = confirmationUrl(1, 1626737676114).match(
-    /http:\/\/localhost(.+)/
-  )!;
+  test("tampered URL", async () => {
+    const [, signature] = signUrl(verificationUrl(1)).match(signatureRegex)!;
 
-  const res = await request(app).post(url).expect(400);
+    const res = await testAgent
+      .post("/email/verify")
+      .set("Cookie", [testCookie])
+      .send({ expiredAt: new Date().getTime(), signature }); // custom expiration
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.body.message, "URL is invalid");
+  });
 
-  t.equal(res.body.message, "URL has expired");
-});
+  test("expired URL", async () => {
+    const expDate = addHours(new Date(), -LINK_EXPIRES_IN_HRS);
+    const expiredAt = expDate.getTime();
 
-t.test("/email/verify - invalid user ID (user doesn't exist)", async (t) => {
-  const [, url] = confirmationUrl(999).match(/http:\/\/localhost(.+)/)!;
+    const [, signature] = signUrl(verificationUrl(1, expiredAt)).match(
+      signatureRegex
+    )!;
 
-  const res = await request(app).post(url).expect(400);
+    const res = await testAgent
+      .post("/email/verify")
+      .set("Cookie", [testCookie])
+      .send({ expiredAt, signature });
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.body.message, "URL has expired");
+  });
 
-  t.equal(res.body.message, "Email is incorrect or already verified");
-});
+  const idSignatureRegex = /expiredAt=(\d{13,})&signature=(.+)$/;
 
-t.test("/email/verify - already verified", async (t) => {
-  const email = "gary@gmail.com";
+  test("already verified", async () => {
+    const [, expiredAt, signature] = signUrl(verificationUrl(1)).match(
+      idSignatureRegex
+    )!;
 
-  await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Gary" })
-    .expect(201);
+    const res = await testAgent
+      .post("/email/verify")
+      .set("Cookie", [testCookie])
+      .send({ expiredAt: +expiredAt!, signature });
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.body.message, "Email is already verified");
+  });
 
-  const [, link] = fakeInbox[email][0].message.html.match(
-    /<a href="http:\/\/localhost(.+)">/
-  );
+  test("using someone else's URL", async () => {
+    const [, expiredAt, signature] = signUrl(verificationUrl(999)).match(
+      idSignatureRegex
+    )!;
 
-  await request(app).post(link).expect(200);
-
-  const res = await request(app).post(link).expect(400);
-
-  t.equal(res.body.message, "Email is incorrect or already verified");
+    const res = await testAgent
+      .post("/email/verify")
+      .set("Cookie", [testCookie])
+      .send({ expiredAt: +expiredAt!, signature });
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.body.message, "URL is invalid"); // because it was signed with user ID 1
+  });
 });

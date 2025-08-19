@@ -1,7 +1,7 @@
-export * from "./auth";
+export * from "./auth.js";
 
-export * from "./demo";
+export * from "./email.js";
 
-export * from "./email";
+export * from "./password.js";
 
-export * from "./password";
+export * from "./user.js";

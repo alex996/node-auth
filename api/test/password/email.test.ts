@@ -1,70 +1,62 @@
-import t from "tap";
-import request from "supertest";
-import { app, fakeInbox } from "../setup";
+import assert from "node:assert";
+import test, { before, describe } from "node:test";
+import {
+  createTestUser,
+  fakeInbox,
+  sleep,
+  testAgent,
+  testCookie,
+  testLogin,
+} from "../setup.js";
 
-t.test("/password/email - happy path", async (t) => {
-  const email = "mark@gmail.com";
+describe("POST /password/email", () => {
+  before(createTestUser);
 
-  await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Mark" })
-    .expect(201);
+  test("happy path", async () => {
+    const res = await testAgent
+      .post("/password/email")
+      .send({ email: testLogin.email });
 
-  await request(app).post("/password/email").send({ email }).expect(200);
+    assert.strictEqual(res.status, 200);
 
-  t.match(
-    fakeInbox[email][1].message.html,
-    /\/password\/reset\?id=\d{1,}&token=[a-z\d]{80}/
-  );
-});
+    await sleep(5);
 
-t.test("/password/email - already authenticated", async (t) => {
-  const email = "test@gmail.com";
+    const linkRegex = /\/password\/reset\?id=\d{1,}&token=[\w\-]{43}/;
+    assert.match(fakeInbox[testLogin.email]![0].message.html, linkRegex);
 
-  const login = await request(app)
-    .post("/login")
-    .send({ email, password: "test" })
-    .expect(200);
-  const cookie = login.headers["set-cookie"][0].split(/;/, 1)[0];
+    // "Resend" works too
+    await testAgent.post("/password/email").send({ email: testLogin.email });
 
-  const res = await request(app)
-    .post("/password/email")
-    .set("Cookie", [cookie])
-    .send({ email })
-    .expect(403);
+    await sleep(5);
 
-  t.equal(res.body.message, "Forbidden");
-});
+    assert.match(fakeInbox[testLogin.email]![1].message.html, linkRegex);
+  });
 
-t.test("/password/email - missing body", async (t) => {
-  const res = await request(app).post("/password/email").expect(400);
+  test("already logged in", async () => {
+    const res = await testAgent
+      .post("/password/email")
+      .set("Cookie", [testCookie])
+      .send({ email: testLogin.email });
 
-  t.equal(res.body.validation.body.message, '"email" is required');
-});
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.body.message, "Forbidden");
+  });
 
-t.test("/password/email - invalid email", async (t) => {
-  const res = await request(app)
-    .post("/password/email")
-    .send({ email: "bogus@gmail.com" })
-    .expect(400);
+  test("empty body", async () => {
+    const res = await testAgent.post("/password/email").send({});
 
-  t.equal(res.body.message, "Email does not exist");
-});
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(res.body.body.email._errors, [
+      "Invalid input: expected string, received undefined",
+    ]);
+  });
 
-t.test("/password/email - multiple tokens", async (t) => {
-  const email = "rob@gmail.com";
+  test("invalid email", async () => {
+    const res = await testAgent
+      .post("/password/email")
+      .send({ email: "bogus@example.com" });
 
-  await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Rob" })
-    .expect(201);
-
-  await request(app).post("/password/email").send({ email }).expect(200);
-
-  await request(app).post("/password/email").send({ email }).expect(200);
-
-  t.match(
-    fakeInbox[email][2].message.html,
-    /\/password\/reset\?id=\d{1,}&token=[a-z\d]{80}/
-  );
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(res.body.body.email._errors, ["Email not found"]);
+  });
 });

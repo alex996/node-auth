@@ -1,67 +1,78 @@
-import t from "tap";
-import request from "supertest";
-import { app, fakeInbox } from "../setup";
+import assert from "node:assert";
+import test, { before, describe } from "node:test";
+import {
+  createTestUser,
+  fakeInbox,
+  getCookie,
+  testAgent,
+  testCookie,
+  testLogin,
+} from "../setup.js";
 
-t.test("/register - happy path", async (t) => {
-  const email = "alex@gmail.com";
+describe("POST /register", () => {
+  const name = "Joe Doe";
+  const email = "joedoe@example.com";
+  const password = "secret12";
 
-  const res = await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Alex" })
-    .expect(201)
-    .expect("Set-Cookie", /sid=.+; Expires=.+; HttpOnly; SameSite=Strict/);
+  before(createTestUser);
 
-  t.match(
-    fakeInbox[email][0].message.html,
-    /\/email\/verify\?id=\d{1,}&expires=\d{13,}&signature=[a-z\d]{64}/
-  );
+  test("happy path", async () => {
+    const res = await testAgent.post("/register").send({
+      name,
+      email,
+      password,
+    });
 
-  const cookie = res.headers["set-cookie"][0].split(/;/, 1)[0];
+    assert.strictEqual(res.status, 200);
+    assert.ok(typeof res.body.id === "number");
+    assert.partialDeepStrictEqual(res.body, {
+      name,
+      email,
+      verified_at: null,
+    });
+    assert.match(
+      res.headers["set-cookie"]?.[0]!,
+      /sid=s%3A[^;]+; Path=\/; Expires=[^;]+; HttpOnly; SameSite=Strict/
+    );
+    const cookie = getCookie(res)!;
+    assert.ok(cookie.startsWith(`sid=s%3A${res.body.id}`));
 
-  await request(app).get("/me").set("Cookie", [cookie]).expect(200);
-});
+    const resMe = await testAgent.get("/me").set("Cookie", [cookie]);
+    assert.strictEqual(resMe.status, 200);
 
-t.test("/register - missing body", async (t) => {
-  const res = await request(app).post("/register").expect(400);
+    assert.match(
+      fakeInbox[email]![0]!.message.html,
+      /\/email\/verify\?id=\d{1,}&expiredAt=\d{13,}&signature=[\w\-]{43}/
+    );
+  });
 
-  t.equal(
-    res.body.validation.body.message,
-    '"email" is required. "password" is required. "name" is required'
-  );
-});
+  test("empty body", async () => {
+    const res = await testAgent.post("/register").send({});
 
-t.test("/register - email already taken", async (t) => {
-  const res = await request(app)
-    .post("/register")
-    .send({ email: "test@gmail.com", password: "123456", name: "Test" })
-    .expect(400);
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(Object.keys(res.body.body), [
+      "_errors",
+      "email",
+      "password",
+      "name",
+    ]);
+  });
 
-  t.equal(res.body.message, "Email is already taken");
-});
+  test("already logged in", async () => {
+    const res = await testAgent.post("/register").set("Cookie", [testCookie]);
 
-t.test("/register - already logged in", async (t) => {
-  const login = await request(app)
-    .post("/login")
-    .send({ email: "test@gmail.com", password: "test" })
-    .expect(200);
-  const cookie = login.headers["set-cookie"][0].split(/;/, 1)[0];
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.body.message, "Forbidden");
+  });
 
-  const res = await request(app)
-    .post("/register")
-    .set("Cookie", [cookie])
-    // .send({}) // doesn't matter what the body is
-    .expect(403);
+  test("email already taken", async () => {
+    const res = await testAgent
+      .post("/register")
+      .send({ name, email: testLogin.email, password });
 
-  t.equal(res.body.message, "Forbidden");
-});
-
-t.test("/register - invalid/expired cookie", async (t) => {
-  await request(app)
-    .post("/register")
-    .set("Cookie", [
-      "sid=s%3AT_Pkrw6AvSQ3LfOYC9q0EnE1uqWQhJbp.hTs%2BqXXHbFMn2dxgSKBWd%2F%2FEQ8xwnV3KKsA9IwVJ7nU",
-    ])
-    .send({ email: "max@gmail.com", password: "123456", name: "Max" })
-    .expect(201)
-    .expect("Set-Cookie", /sid=.+; Expires=.+; HttpOnly; SameSite=Strict/);
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(res.body.body.email._errors, [
+      "Email is already taken",
+    ]);
+  });
 });

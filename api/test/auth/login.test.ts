@@ -1,55 +1,74 @@
-import t from "tap";
-import request from "supertest";
-import { app } from "../setup";
+import assert from "node:assert";
+import test, { before, describe } from "node:test";
+import {
+  createTestUser,
+  getCookie,
+  testAgent,
+  testCookie,
+  testLogin,
+} from "../setup.js";
 
-t.test("/login - happy path", async (t) => {
-  const res = await request(app)
-    .post("/login")
-    .send({ email: "test@gmail.com", password: "test" })
-    .expect(200)
-    .expect("Set-Cookie", /sid=.+; Expires=.+; HttpOnly; SameSite=Strict/);
+describe("POST /login", () => {
+  before(createTestUser);
 
-  const cookie = res.headers["set-cookie"][0].split(/;/, 1)[0];
+  test("happy path", async () => {
+    const res = await testAgent.post("/login").send(testLogin);
 
-  await request(app).get("/me").set("Cookie", [cookie]).expect(200);
-});
+    assert.strictEqual(res.status, 200);
+    assert.partialDeepStrictEqual(res.body, {
+      id: 1,
+      name: "Test",
+      email: testLogin.email,
+    });
+    assert.ok(typeof res.body.verified_at === "number");
+    assert.match(
+      res.headers["set-cookie"]?.[0]!,
+      /sid=s%3A[^;]+; Path=\/; Expires=[^;]+; HttpOnly; SameSite=Strict/
+    );
+    const cookie = getCookie(res)!;
+    assert.ok(cookie.startsWith(`sid=s%3A${res.body.id}`));
 
-t.test("/login - missing credentials", async (t) => {
-  const res = await request(app).post("/login").expect(400);
+    const resMe = await testAgent.get("/me").set("Cookie", [cookie]);
+    assert.strictEqual(resMe.status, 200);
+  });
 
-  t.equal(
-    res.body.validation.body.message,
-    '"email" is required. "password" is required'
-  );
-});
+  test("empty body", async () => {
+    const res = await testAgent.post("/login").send({});
 
-t.test("/login - invalid email (user doesn't exist)", async (t) => {
-  const res = await request(app)
-    .post("/login")
-    .send({ email: "bogus@gmail.com", password: "test" })
-    .expect(401);
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(Object.keys(res.body.body), [
+      "_errors",
+      "email",
+      "password",
+    ]);
+  });
 
-  t.equal(res.body.message, "Email or password is incorrect");
-});
+  test("already logged in", async () => {
+    const res = await testAgent.post("/login").set("Cookie", [testCookie]);
 
-t.test("/login - invalid password (user does exist)", async (t) => {
-  const res = await request(app)
-    .post("/login")
-    .send({ email: "test@gmail.com", password: "wrong" })
-    .expect(401);
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.body.message, "Forbidden");
+  });
 
-  t.equal(res.body.message, "Email or password is incorrect");
-});
+  test("email doesn't exist", async () => {
+    const res = await testAgent
+      .post("/login")
+      .send({ email: "bogus@example.com", password: "test" });
 
-t.test("/login - already logged in", async (t) => {
-  const payload = { email: "test@gmail.com", password: "test" };
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(res.body.body.email._errors, ["Email is incorrect"]);
+  });
 
-  const req = await request(app).post("/login").send(payload).expect(200);
+  test("incorrect password", async () => {
+    const res = await testAgent
+      .post("/login")
+      .send({ email: testLogin.email, password: "test" });
 
-  await request(app)
-    .post("/login")
-    .set("Cookie", [req.headers.sid])
-    .send(payload)
-    .expect(200)
-    .expect("Set-Cookie", /sid=.+; Expires=.+; HttpOnly; SameSite=Strict/);
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(res.body.body.password._errors, [
+      "Password is incorrect",
+    ]);
+  });
+
+  test("already log");
 });

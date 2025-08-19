@@ -1,141 +1,171 @@
-import { Router } from "express";
-import { randomBytes } from "crypto";
-import dayjs from "dayjs";
-import { SendMailOptions } from "nodemailer";
-import { guest, auth } from "../middleware";
-import {
-  validate,
-  sendResetSchema,
-  resetPasswordSchema,
-  confirmPasswordSchema,
-} from "../validation";
-import { db } from "../db";
-import { hmacSha256, safeEqual, compress } from "../utils";
-import { hashPassword, comparePassword } from "./auth";
-import {
-  APP_SECRET,
-  PWD_RESET_TOKEN_BYTES,
-  PWD_RESET_EXPIRES_IN_HOURS,
-  APP_ORIGIN,
-  MAIL_FROM,
-} from "../config";
+import bcrypt from "bcrypt";
+import type { Express, Request } from "express";
+import crypto from "node:crypto";
+import type { SendMailOptions } from "nodemailer";
+import * as z from "zod";
+import { env, TOKEN_EXPIRES_IN_HRS, WEB_ORIGIN } from "../config.js";
+import { db, type ResetToken } from "../db.js";
+import { auth, guest, validate } from "../middleware.js";
+import { prehash, zodEmail, zodPassword } from "./auth.js";
+import { addHours, sendEmail, zod32Bytes } from "./email.js";
 
-const router = Router();
+export async function passwordRoutes(app: Express) {
+  app.post(
+    "/password/email",
+    guest,
+    validate({
+      body: z.strictObject({
+        email: zodEmail,
+      }),
+    }),
+    async (req, res) => {
+      // Beware of email enumeration.
+      const userId = db
+        .prepare<string, number>(`select id from users where email = ?`)
+        .pluck()
+        .get(req.body.email);
+      if (!userId) {
+        throw new z.ZodError([
+          {
+            code: "custom",
+            message: "Email not found",
+            path: ["body", "email"],
+          },
+        ]);
+      }
 
-// Password reset request
+      const token = crypto.randomBytes(32);
+      const expDate = addHours(new Date(), TOKEN_EXPIRES_IN_HRS);
 
-router.post(
-  "/password/email",
-  guest,
-  validate(sendResetSchema),
-  async (req, res) => {
-    const { email } = req.body;
+      // We treat reset tokens like passwords, so we don't store them in plaintext.
+      const tokenHash = signToken(token);
 
-    const user = db.users.find((user) => user.email === email);
+      // FIXME you probably want to store tokens in a key-value store with auto-expiration
+      db.prepare("insert into reset_tokens values (null, ?, ?, ?)").run(
+        userId,
+        tokenHash,
+        expDate.getTime()
+      );
 
-    if (!user) {
-      // TODO throw Joi error if possible, assuming the above check is async
-      return res.status(400).json({
-        message: "Email does not exist",
-      });
+      sendEmail(
+        req.app.locals.mailer,
+        passwordResetEmail(req.body.email, token.toString("base64url"), userId)
+      );
+
+      res.json({ message: "OK" });
     }
+  );
 
-    const token = randomBytes(PWD_RESET_TOKEN_BYTES).toString("hex");
-    const expiresAt = dayjs()
-      .add(PWD_RESET_EXPIRES_IN_HOURS, "hour")
-      .toISOString();
+  app.post(
+    "/password/reset",
+    guest,
+    validate({
+      body: z.strictObject({
+        id: z.number().int().positive(),
+        token: zod32Bytes,
+        password: zodPassword,
+      }),
+    }),
+    async (req, res) => {
+      const { id, token, password } = req.body;
 
-    // NOTE we treat reset tokens like passwords, so we don't store
-    // them in plaintext. Instead, we hash and sign them with a secret.
-    db.passwordResets.push({
-      id: db.passwordResets.length + 1,
-      userId: user.id,
-      token: hmacSha256(token, APP_SECRET),
-      expiresAt,
-    });
+      const tokenHash = signToken(Buffer.from(token, "base64url"));
 
-    const { mailer } = req.app.locals;
-    await mailer.sendMail(passwordResetEmail(email, token, user.id));
+      // where body = ? is not timing-safe.
+      const userTokens = db
+        .prepare<number, ResetToken>(
+          `select * from reset_tokens where user_id = ?`
+        )
+        .all(id);
+      const resetToken = userTokens.find((t) =>
+        crypto.timingSafeEqual(t.body, tokenHash)
+      ); // TODO change to timing-safe for/of without break?
 
-    res.json({ message: "OK" });
-  }
-);
+      if (!resetToken) {
+        return res.status(400).json({ message: "Token is invalid" });
+      }
+      if (resetToken.expired_at <= Date.now()) {
+        return res.status(400).json({ message: "Token has expired" });
+      }
 
-// Password reset submission
+      const hash = await bcrypt.hash(prehash(password), env.BCRYPT_COST_FACTOR);
+      db.prepare("update users set password_hash = ? where id = ?").run(
+        hash,
+        id
+      );
 
-router.post(
-  "/password/reset",
-  guest,
-  validate(resetPasswordSchema),
-  async (req, res) => {
-    const { token, id } = req.query;
-    const { password } = req.body;
+      // Invalidate all user reset tokens
+      db.prepare("delete from reset_tokens where user_id = ?").run(id);
 
-    const hashedToken = hmacSha256(String(token), APP_SECRET);
-    const resetToken = db.passwordResets.find(
-      (reset) =>
-        reset.userId === Number(id) && safeEqual(reset.token, hashedToken)
-    );
+      destroyAllUserSessions(req, id);
 
-    if (!resetToken) {
-      return res.status(401).json({ message: "Token or ID is invalid" });
+      res.json({ message: "OK" });
     }
+  );
 
-    const user = db.users.find((user) => user.id === Number(id));
-    if (!user) throw new Error(`User id = ${id} not found`); // unreachable
-    user.password = await hashPassword(password);
+  // TODO
+  // app.post("/password/change", auth, validate({}), async (req, res) => {})
 
-    // Invalidate all user reset tokens
-    db.passwordResets = db.passwordResets.filter(
-      (reset) => reset.userId !== Number(id)
-    );
+  app.post(
+    "/password/confirm",
+    auth,
+    validate({
+      body: z.strictObject({
+        password: zodPassword,
+      }),
+    }),
+    async (req, res) => {
+      const hash = db
+        .prepare<number, string>(`select password_hash from users where id = ?`)
+        .pluck()
+        .get(req.session.userId!)!;
 
-    res.json({ message: "OK" });
-  }
-);
+      const matches = await bcrypt.compare(prehash(req.body.password), hash);
+      if (!matches) {
+        throw new z.ZodError([
+          {
+            code: "custom",
+            message: "Password is incorrect",
+            path: ["body", "password"],
+          },
+        ]);
+      }
 
-// Password confirmation
+      req.session.confirmedAt = Date.now();
 
-router.post(
-  "/password/confirm",
-  auth,
-  validate(confirmPasswordSchema),
-  async (req, res) => {
-    const { password } = req.body;
-    const { userId } = req.session;
-
-    const user = db.users.find((user) => user.id === userId);
-    if (!user) throw new Error(`User id = ${userId} not found`); // unreachable
-
-    const pwdMatches = await comparePassword(password, user.password);
-
-    if (!pwdMatches) {
-      return res.status(401).json({ message: "Password is incorrect" });
+      res.json({ message: "OK" });
     }
+  );
+}
 
-    req.session.confirmedAt = Date.now();
-
-    res.json({ message: "OK" });
-  }
-);
-
-// Utils
+const signToken = (token: Buffer) =>
+  crypto.createHmac("sha256", env.SIGNING_KEY).update(token).digest();
 
 function passwordResetEmail(
   to: string,
   token: string,
   userId: number
 ): SendMailOptions {
-  const url = `${APP_ORIGIN}/password/reset?id=${userId}&token=${token}`;
+  const url = `${WEB_ORIGIN}/password/reset?id=${userId}&token=${token}`;
   return {
-    from: MAIL_FROM,
+    from: env.MAIL_FROM,
     to,
     subject: "Reset your password",
-    html: compress(`
-      <p>To reset your password, POST to the link below.</p>
+    html: `
+      <p>To reset your password, click the link below.</p>
       <a href="${url}">${url}</a>
-    `), // TODO should be a link to the front-end
+    `.trim(),
   };
 }
 
-export { router as password };
+// FIXME don't use MemoryStore in production. For example,
+// in Redis, you can scan for keys by pattern and delete them
+// https://stackoverflow.com/a/23399125
+export function destroyAllUserSessions(req: Request, userId: number) {
+  // @ts-expect-error
+  for (const key in req.sessionStore.sessions) {
+    if (key.startsWith(`${userId}-`)) {
+      req.sessionStore.destroy(key);
+    }
+  }
+}

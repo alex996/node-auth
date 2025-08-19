@@ -1,56 +1,47 @@
-import t from "tap";
-import request from "supertest";
-import { app, fakeInbox } from "../setup";
+import assert from "node:assert";
+import test, { before, describe } from "node:test";
+import {
+  createTestUser,
+  fakeInbox,
+  getCookie,
+  sleep,
+  testAgent,
+  testCookie,
+} from "../setup.js";
 
-t.test("/email/resend - happy path", async (t) => {
-  const email = "homer@gmail.com";
+describe("POST /email/resend", () => {
+  before(createTestUser);
 
-  await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Homer" })
-    .expect(201);
+  test("happy path", async () => {
+    const email = "janedoe@example.com";
+    const registerRes = await testAgent
+      .post("/register")
+      .send({ name: "Jane", email, password: "test" });
+    const cookie = getCookie(registerRes)!;
 
-  await request(app).post("/email/resend").send({ email }).expect(200);
+    const res = await testAgent.post("/email/resend").set("Cookie", [cookie]);
+    assert.strictEqual(res.status, 200);
 
-  t.match(
-    fakeInbox[email][1].message.html,
-    /\/email\/verify\?id=\d{1,}&expires=\d{13,}&signature=[a-z\d]{64}/
-  );
-});
+    await sleep(5); // until the 2nd email is sent
 
-t.test("/email/resend - missing body", async (t) => {
-  const res = await request(app).post("/email/resend").expect(400);
+    assert.match(
+      fakeInbox[email]![1]!.message.html,
+      /\/email\/verify\?id=\d{1,}&expiredAt=\d{13,}&signature=[\w\-]{43}/
+    );
+  });
 
-  t.equal(res.body.validation.body.message, '"email" is required');
-});
+  test("not logged in", async () => {
+    const res = await testAgent.post("/email/resend");
 
-t.test("/email/resend - non-existing email", async (t) => {
-  const res = await request(app)
-    .post("/email/resend")
-    .send({ email: "bogus@gmail.com" })
-    .expect(400);
+    assert.strictEqual(res.status, 401);
+    assert.strictEqual(res.body.message, "Unauthorized");
+  });
 
-  t.equal(res.body.message, "Email is incorrect or already verified");
-});
-
-t.test("/email/resend - already verified", async (t) => {
-  const email = "josh@gmail.com";
-
-  await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Josh" })
-    .expect(201);
-
-  const [, link] = fakeInbox[email][0].message.html.match(
-    /<a href="http:\/\/localhost(.+)">/
-  );
-
-  await request(app).post(link).expect(200);
-
-  const res = await request(app)
-    .post("/email/resend")
-    .send({ email })
-    .expect(400);
-
-  t.equal(res.body.message, "Email is incorrect or already verified");
+  test("already verified", async () => {
+    const res = await testAgent
+      .post("/email/resend")
+      .set("Cookie", [testCookie]);
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.body.message, "Email is already verified");
+  });
 });

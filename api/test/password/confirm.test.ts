@@ -1,61 +1,51 @@
-import t from "tap";
-import request from "supertest";
-import { app } from "../setup";
+import assert from "node:assert";
+import test, { before, describe } from "node:test";
+import { createTestUser, testAgent, testCookie, testLogin } from "../setup.js";
 
-t.test("/password/confirm - happy path", async (t) => {
-  const password = "test";
+describe("POST /register", () => {
+  before(createTestUser);
 
-  const login = await request(app)
-    .post("/login")
-    .send({ email: "test@gmail.com", password })
-    .expect(200);
+  test("happy path", async () => {
+    const res = await testAgent
+      .post("/password/confirm")
+      .set("Cookie", [testCookie])
+      .send({ password: testLogin.password });
+    assert.strictEqual(res.status, 200);
 
-  const cookie = login.headers["set-cookie"][0].split(/;/, 1)[0];
+    const confirmedRes = await testAgent
+      .get("/me/confirmed")
+      .set("Cookie", [testCookie]);
+    assert.strictEqual(confirmedRes.status, 200);
+  });
 
-  await request(app)
-    .post("/password/confirm")
-    .set("Cookie", [cookie])
-    .send({ password })
-    .expect(200);
+  test("not logged in", async () => {
+    const res = await testAgent.post("/password/confirm");
 
-  await request(app).get("/me/confirmed").set("Cookie", [cookie]).expect(200);
-});
+    assert.strictEqual(res.status, 401);
+    assert.strictEqual(res.body.message, "Unauthorized");
+  });
 
-t.test("/password/confirm - guest (unauthorized)", async (t) => {
-  const res = await request(app).post("/password/confirm").expect(401);
+  test("empty body", async () => {
+    const res = await testAgent
+      .post("/password/confirm")
+      .set("Cookie", [testCookie])
+      .send({});
 
-  t.equal(res.body.message, "Unauthorized");
-});
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(res.body.body.password._errors, [
+      "Invalid input: expected string, received undefined",
+    ]);
+  });
 
-t.test("/password/confirm - missing body", async (t) => {
-  const login = await request(app)
-    .post("/login")
-    .send({ email: "test@gmail.com", password: "test" })
-    .expect(200);
+  test("incorrect password", async () => {
+    const res = await testAgent
+      .post("/password/confirm")
+      .set("Cookie", [testCookie])
+      .send({ password: "bogus" });
 
-  const cookie = login.headers["set-cookie"][0].split(/;/, 1)[0];
-
-  const res = await request(app)
-    .post("/password/confirm")
-    .set("Cookie", [cookie])
-    .expect(400);
-
-  t.equal(res.body.validation.body.message, '"password" is required');
-});
-
-t.test("/password/confirm - incorrect password", async (t) => {
-  const login = await request(app)
-    .post("/login")
-    .send({ email: "test@gmail.com", password: "test" })
-    .expect(200);
-
-  const cookie = login.headers["set-cookie"][0].split(/;/, 1)[0];
-
-  const res = await request(app)
-    .post("/password/confirm")
-    .set("Cookie", [cookie])
-    .send({ password: "bogus" })
-    .expect(401);
-
-  t.equal(res.body.message, "Password is incorrect");
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(res.body.body.password._errors, [
+      "Password is incorrect",
+    ]);
+  });
 });

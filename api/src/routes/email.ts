@@ -1,91 +1,136 @@
-import { Router } from "express";
-import dayjs from "dayjs";
-import { SendMailOptions } from "nodemailer";
-import { validate, verifyEmailSchema, resendEmailSchema } from "../validation";
-import { db } from "../db";
-import { safeEqual, hmacSha256, compress } from "../utils";
+import type { Express } from "express";
+import crypto from "node:crypto";
+import type { SendMailOptions } from "nodemailer";
+import * as z from "zod";
 import {
-  APP_ORIGIN,
-  APP_SECRET,
-  MAIL_EXPIRES_IN_DAYS,
-  MAIL_FROM,
-} from "../config";
+  env,
+  LINK_EXPIRES_IN_HRS,
+  ONE_HOUR_MS,
+  WEB_ORIGIN,
+  type Mailer,
+} from "../config.js";
+import { db, type User } from "../db.js";
+import { auth, validate } from "../middleware.js";
 
-const router = Router();
+export const zod32Bytes = z
+  .string()
+  .length(43) // base64url, 44 - 1 (padding)
+  .regex(/^[\w\-]*$/, { error: "Invalid string: must be alphanumeric" }); // https://stackoverflow.com/a/6102251
 
-// Email verification
+// There may be reasons not to put these routes behind `auth`.
+// Ex: you don't want to log the user in until they're verified.
+export function emailRoutes(app: Express) {
+  app.post(
+    "/email/verify",
+    auth,
+    validate({
+      body: z.strictObject({
+        expiredAt: z.number().int().positive(), // Unix
+        signature: zod32Bytes,
+      }),
+    }),
+    (req, res) => {
+      const { expiredAt, signature } = req.body;
+      const userId = req.session.userId!;
 
-// NOTE both routes could be behind `auth` middleware in which case
-// we wouldn't need to ask for the user ID or email.
-router.post("/email/verify", validate(verifyEmailSchema), (req, res) => {
-  const { id, expires } = req.query;
+      const url = verificationUrl(userId, expiredAt);
 
-  const expectedUrl = confirmationUrl(Number(id), Number(expires));
-  const actualUrl = `${APP_ORIGIN}${req.originalUrl}`;
+      if (!safeEqual(signature, urlSignature(url))) {
+        return res.status(400).json({ message: "URL is invalid" });
+      }
 
-  if (!safeEqual(expectedUrl, actualUrl)) {
-    return res.status(400).json({ message: "URL is invalid" });
-  }
+      if (expiredAt <= Date.now()) {
+        return res.status(400).json({ message: "URL has expired" });
+      }
 
-  if (Number(expires) <= Date.now()) {
-    return res.status(400).json({ message: "URL has expired" });
-  }
+      const verifiedAt = new Date().getTime();
+      const updateResult = db
+        .prepare(
+          "update users set verified_at = ? where id = ? and verified_at is null"
+        )
+        .run(verifiedAt, userId);
+      if (updateResult.changes !== 1) {
+        return res.status(400).json({ message: "Email is already verified" });
+      }
 
-  const user = db.users.find((user) => user.id === Number(id));
+      res.json(verifiedAt);
+    }
+  );
 
-  if (!user || user.verifiedAt) {
-    return res
-      .status(400)
-      .json({ message: "Email is incorrect or already verified" });
-  }
+  // Adding `auth` precludes email enumeration; otherwise, you need to handle it.
+  app.post("/email/resend", auth, async (req, res) => {
+    const user = db
+      .prepare<number, User>("select * from users where id = ?")
+      .get(req.session.userId!)!;
 
-  user.verifiedAt = new Date().toISOString();
+    if (user.verified_at) {
+      return res.status(400).json({ message: "Email is already verified" });
+    }
 
-  res.json({ message: "OK" });
-});
+    sendEmail(req.app.locals.mailer, verificationEmail(user.email, user.id));
 
-// Email resend
-
-router.post("/email/resend", validate(resendEmailSchema), async (req, res) => {
-  const { email } = req.body;
-  const user = db.users.find((user) => user.email === email);
-
-  if (!user || user.verifiedAt) {
-    return res
-      .status(400)
-      .json({ message: "Email is incorrect or already verified" });
-  }
-
-  const { mailer } = req.app.locals;
-  await mailer.sendMail(confirmationEmail(email, user.id));
-
-  res.json({ message: "OK" });
-});
-
-// Utils
-
-export function confirmationUrl(userId: number, expiresInMs?: number) {
-  expiresInMs =
-    expiresInMs || dayjs().add(MAIL_EXPIRES_IN_DAYS, "day").valueOf();
-
-  const url = `${APP_ORIGIN}/email/verify?id=${userId}&expires=${expiresInMs}`;
-  const signature = hmacSha256(url, APP_SECRET); // 256 bits = 32 bytes, 32 * 2 = 64 chars
-
-  return `${url}&signature=${signature}`;
+    res.json({ message: "OK" });
+  });
 }
 
-export function confirmationEmail(to: string, userId: number): SendMailOptions {
-  const url = confirmationUrl(userId);
+export function verificationEmail(to: string, userId: number): SendMailOptions {
+  const url = signUrl(verificationUrl(userId));
 
   return {
-    from: MAIL_FROM,
+    from: env.MAIL_FROM,
     to,
     subject: "Confirm your email",
-    html: compress(`
-      <p>To verify your email, POST to the link below.</p>
+    html: `
+      <p>To verify your email, click the link below.</p>
       <a href="${url}">${url}</a>
-    `), // TODO should be a link to the front-end
+    `.trim(),
   };
 }
 
-export { router as email };
+export function verificationUrl(userId: number, expiredAtMs?: number) {
+  if (!expiredAtMs) {
+    const expDate = addHours(new Date(), LINK_EXPIRES_IN_HRS);
+    expiredAtMs = expDate.getTime();
+  }
+  return `${WEB_ORIGIN}/email/verify?id=${userId}&expiredAt=${expiredAtMs}`;
+}
+
+export function signUrl(url: string) {
+  const delimiter = url.includes("?") ? "&" : "?";
+  return `${url}${delimiter}signature=${urlSignature(url)}`;
+}
+
+// "When encoding a Buffer to a string, this encoding will omit padding."
+// https://nodejs.org/api/buffer.html#buffers-and-character-encodings
+const urlSignature = (url: string) =>
+  crypto.createHmac("sha256", env.SIGNING_KEY).update(url).digest("base64url");
+
+export async function sendEmail(mailer: Mailer, mailOpts: SendMailOptions) {
+  if (env.DEV_QUIET) {
+    console.log(mailOpts);
+    return;
+  }
+  try {
+    return await mailer.sendMail(mailOpts); // await is on purpose https://stackoverflow.com/a/42750371
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function safeEqual(a: string, b: string) {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+
+  // crypto.timingSafeEqual() requires buffers of the same length.
+  // We short-circuit when they have unequal lengths. This will leak
+  // the length of our secret string. However, this function is intended
+  // for hashes, which have fixed length depending on the algorithm.
+  // https://github.com/nodejs/node/issues/17178
+  return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+}
+
+// Works with DST unlike setHours https://stackoverflow.com/a/35175523
+export function addHours(date: Date, hours: number) {
+  date.setTime(date.getTime() + hours * ONE_HOUR_MS);
+  return date;
+}

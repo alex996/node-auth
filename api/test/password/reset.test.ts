@@ -1,109 +1,124 @@
-import t from "tap";
-import request from "supertest";
-import { randomBytes } from "crypto";
-import { app, fakeInbox } from "../setup";
+import assert from "node:assert";
+import crypto from "node:crypto";
+import test, { before, describe } from "node:test";
+import {
+  createTestUser,
+  fakeInbox,
+  getCookie,
+  sleep,
+  testAgent,
+  testCookie,
+} from "../setup.js";
 
-t.test("/password/reset - happy path", async (t) => {
-  const email = "samuel@gmail.com";
+describe("POST /password/reset", () => {
+  const password = "whatever";
+  const idTokenRegex = /\/password\/reset\?id=(\d{1,})&token=([\w\-]{43})/;
 
-  await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Samuel" })
-    .expect(201);
+  before(createTestUser);
 
-  await request(app).post("/password/email").send({ email }).expect(200);
+  test("happy path", async () => {
+    const email = "jim@example.com";
 
-  const [, link] = fakeInbox[email][1].message.html.match(
-    /<a href="http:\/\/localhost(.+)">/
-  );
+    const registerRes = await testAgent
+      .post("/register")
+      .send({ name: "Jim", email, password: "test" });
+    const cookie = getCookie(registerRes)!;
 
-  const password = "789012";
+    await testAgent.post("/password/email").send({ email });
 
-  await request(app).post(link).send({ password }).expect(200);
+    await sleep(5);
 
-  await request(app).post("/login").send({ email, password }).expect(200);
-});
+    const [, id, token] = fakeInbox[email]![1].message.html.match(idTokenRegex);
 
-t.test("/password/reset - already authenticated", async (t) => {
-  const email = "test@gmail.com";
+    const res = await testAgent
+      .post("/password/reset")
+      .send({ id: +id, token, password });
+    assert.strictEqual(res.status, 200);
 
-  const login = await request(app)
-    .post("/login")
-    .send({ email, password: "test" })
-    .expect(200);
-  const cookie = login.headers["set-cookie"][0].split(/;/, 1)[0];
+    const meRes = await testAgent.get("/me").set("Cookie", [cookie]);
+    assert.strictEqual(meRes.status, 401); // auto-logged out
 
-  const res = await request(app)
-    .post("/password/reset")
-    .set("Cookie", [cookie])
-    .send({ email })
-    .expect(403);
+    const loginRes = await testAgent.post("/login").send({ email, password });
+    assert.strictEqual(loginRes.status, 200);
+  });
 
-  t.equal(res.body.message, "Forbidden");
-});
+  test("already logged in", async () => {
+    const res = await testAgent
+      .post("/password/reset")
+      .set("Cookie", [testCookie]);
 
-t.test("/password/reset - missing body and params", async (t) => {
-  const res = await request(app).post("/password/reset").expect(400);
+    assert.strictEqual(res.status, 403);
+    assert.strictEqual(res.body.message, "Forbidden");
+  });
 
-  t.equal(res.body.validation.body.message, '"password" is required');
-  t.equal(
-    res.body.validation.query.message,
-    '"id" is required. "token" is required'
-  );
-});
+  test("empty body", async () => {
+    const res = await testAgent.post("/password/reset").send({});
 
-t.test("/password/reset - invalid token", async (t) => {
-  const res = await request(app)
-    .post(`/password/reset?id=1&token=${randomBytes(40).toString("hex")}`)
-    .send({ password: "test" })
-    .expect(401);
+    assert.strictEqual(res.status, 400);
+    assert.deepStrictEqual(Object.keys(res.body.body), [
+      "_errors",
+      "id",
+      "token",
+      "password",
+    ]);
+  });
 
-  t.equal(res.body.message, "Token or ID is invalid");
-});
+  test("invalid token", async () => {
+    const res = await testAgent.post("/password/reset").send({
+      id: 1,
+      token: crypto.randomBytes(32).toString("base64url"),
+      password,
+    });
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.body.message, "Token is invalid");
+  });
 
-t.test("/password/reset - invalid user ID", async (t) => {
-  const email = "francis@gmail.com";
+  test("using someone else's token", async () => {
+    const email = "rick@example.com";
 
-  await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Francis" })
-    .expect(201);
+    await testAgent
+      .post("/register")
+      .send({ name: "Rick", email, password: "test" });
 
-  await request(app).post("/password/email").send({ email }).expect(200);
+    await testAgent.post("/password/email").send({ email });
 
-  const [, link] = fakeInbox[email][1].message.html.match(
-    /<a href="http:\/\/localhost(.+)">/
-  );
+    await sleep(5);
 
-  const res = await request(app)
-    .post(link.replace(/id=\d{1,}/, "id=1"))
-    .send({ password: "test" })
-    .expect(401);
+    const [, , token] = fakeInbox[email]![1].message.html.match(idTokenRegex);
 
-  t.equal(res.body.message, "Token or ID is invalid");
-});
+    const res = await testAgent
+      .post("/password/reset")
+      .send({ id: 1, token, password });
 
-t.test("/password/verify - token invalidation", async (t) => {
-  const email = "tim@gmail.com";
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.body.message, "Token is invalid");
+  });
 
-  await request(app)
-    .post("/register")
-    .send({ email, password: "123456", name: "Tim" })
-    .expect(201);
+  test("token invalidation", async () => {
+    const email = "tim@example.com";
 
-  await request(app).post("/password/email").send({ email }).expect(200);
+    await testAgent
+      .post("/register")
+      .send({ name: "Tim", email, password: "test" });
 
-  await request(app).post("/password/email").send({ email }).expect(200);
+    await testAgent.post("/password/email").send({ email });
+    await testAgent.post("/password/email").send({ email });
 
-  const regex = /<a href="http:\/\/localhost(.+)">/;
-  const [, link1] = fakeInbox[email][1].message.html.match(regex);
-  const [, link2] = fakeInbox[email][2].message.html.match(regex);
+    await sleep(5);
 
-  const password = "789012";
+    const [, id, token1] =
+      fakeInbox[email]![1].message.html.match(idTokenRegex);
+    const [, , token2] = fakeInbox[email]![2].message.html.match(idTokenRegex);
 
-  await request(app).post(link1).send({ password }).expect(200); // older token still works
+    const res1 = await testAgent
+      .post("/password/reset")
+      .send({ id: +id, token: token1, password });
+    assert.strictEqual(res1.status, 200); // older token still works
 
-  const res = await request(app).post(link2).send({ password }).expect(401);
-
-  t.equal(res.body.message, "Token or ID is invalid");
+    const res2 = await testAgent
+      .post("/password/reset")
+      .send({ id: +id, token: token2, password });
+    assert.strictEqual(res2.status, 400);
+    assert.strictEqual(res2.body.message, "Token is invalid");
+  });
 });

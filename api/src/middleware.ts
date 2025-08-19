@@ -1,56 +1,70 @@
-import { RequestHandler, ErrorRequestHandler } from "express";
-import { db } from "./db";
-import { PWD_CONFIRM_EXPIRES_IN_MS } from "./config";
+import type { RequestHandler } from "express";
+import type { ParamsDictionary } from "express-serve-static-core";
+import type { ParsedQs } from "qs";
+import type { ZodType } from "zod";
+import * as z from "zod";
+import { env, PWD_CONFIRMED_FOR_MS } from "./config.js";
+import { db, type User } from "./db.js";
 
-// https://expressjs.com/en/starter/faq.html#how-do-i-handle-404-responses
-
-export const notFound: RequestHandler = (req, res, next) => {
-  res.status(404).json({ message: "Not Found" });
-};
-
-export const serverError: ErrorRequestHandler = (err, req, res, next) => {
-  // Handle "SyntaxError: Unexpected end of JSON input"
-  if (err instanceof SyntaxError) {
-    return res.status(400).json({ message: "Bad Request" });
-  }
-
-  console.error(err);
-  res.status(500).json({ message: "Server Error" });
-};
-
-// Laravel's naming https://laravel.com/docs/8.x/middleware#assigning-middleware-to-routes
-
-export const auth: RequestHandler = (req, res, next) => {
-  if (req.session.userId) {
-    return next();
-  }
-
-  res.status(401).json({ message: "Unauthorized" });
-};
+// Inspired by express-zod-safe and zod-express-middleware.
+// https://zod.dev/library-authors#how-to-accept-user-defined-schemas
+// TODO add headers, cookies, signedCookies
+// FIXME req.query is not writable
+export function validate<
+  TParams extends ZodType<ParamsDictionary>,
+  TBody extends ZodType,
+  TQuery extends ZodType<ParsedQs>
+>(shape: {
+  params?: TParams;
+  body?: TBody;
+  query?: TQuery;
+}): RequestHandler<z.output<TParams>, any, z.output<TBody>, z.output<TQuery>> {
+  const schema = z.object(shape);
+  return async (req, res, next) => {
+    await schema.parseAsync(req);
+    next();
+  };
+}
 
 export const guest: RequestHandler = (req, res, next) => {
   if (req.session.userId) {
     return res.status(403).json({ message: "Forbidden" });
   }
+  next();
+};
 
+export const auth: RequestHandler = (req, res, next) => {
+  if (!req.session.userId) {
+    if (req.headers.cookie?.includes(`${env.SESSION_COOKIE_NAME}=s%3A`)) {
+      // The cookie is likely expired. Clear it.
+      res.clearCookie(env.SESSION_COOKIE_NAME);
+    }
+    return res.status(401).json({ message: "Unauthorized" });
+  }
   next();
 };
 
 export const verified: RequestHandler = (req, res, next) => {
-  const { userId } = req.session;
-  const { verifiedAt } = db.users.find((user) => user.id === userId) || {};
+  if (req.session.userId) {
+    const user = db
+      .prepare<number, User>("select * from users where id = ?")
+      .get(req.session.userId);
 
-  if (!verifiedAt) {
-    return res.status(403).json({ message: "Forbidden" });
+    if (user?.verified_at) {
+      res.locals.user = user;
+
+      return next();
+    }
   }
 
-  next();
+  return res.status(403).json({ message: "Forbidden" });
 };
 
+// This could also be an OTP challenge.
 export const pwdConfirmed: RequestHandler = (req, res, next) => {
   const { confirmedAt } = req.session;
 
-  if (!confirmedAt || confirmedAt + PWD_CONFIRM_EXPIRES_IN_MS <= Date.now()) {
+  if (!confirmedAt || confirmedAt + PWD_CONFIRMED_FOR_MS <= Date.now()) {
     return res.status(403).json({ message: "Forbidden" });
   }
 

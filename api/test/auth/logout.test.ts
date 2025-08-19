@@ -1,37 +1,39 @@
-import t from "tap";
-import request from "supertest";
-import { app } from "../setup";
+import assert from "node:assert";
+import test, { before, describe } from "node:test";
+import { createTestUser, getCookie, testAgent, testLogin } from "../setup.js";
 
-t.test("/logout - happy path", async (t) => {
-  const req = await request(app)
-    .post("/login")
-    .send({ email: "test@gmail.com", password: "test" })
-    .expect(200);
-  const cookie = req.headers["set-cookie"][0].split(/;/, 1)[0];
+describe("POST /logout", () => {
+  before(createTestUser);
 
-  await request(app)
-    .post("/logout")
-    .set("Cookie", [cookie])
-    .expect(200)
-    .expect("Set-Cookie", /sid=;/);
+  test("happy path", async () => {
+    const loginRes = await testAgent.post("/login").send(testLogin);
+    const cookie = getCookie(loginRes);
+    assert.ok(typeof cookie === "string");
 
-  await request(app).get("/me").set("Cookie", [cookie]).expect(401);
-});
+    const res = await testAgent.post("/logout").set("Cookie", [cookie]);
+    assert.strictEqual(res.status, 200);
+    assert.match(res.headers["set-cookie"]?.[0]!, /sid=;/);
 
-t.test("/logout - not logged in", async (t) => {
-  const res = await request(app).post("/logout").expect(401);
+    const meRes = await testAgent.get("/me").set("Cookie", [cookie]);
+    assert.strictEqual(meRes.status, 401);
+  });
 
-  t.equal(res.body.message, "Unauthorized");
-});
+  test("not logged in", async () => {
+    const res = await testAgent.post("/logout");
 
-t.test("/logout - invalid or expired cookie", async (t) => {
-  const res = await request(app)
-    .post("/logout")
-    .set("Cookie", [
-      "sid=s%3AT_Pkrw6AvSQ3LfOYC9q0EnE1uqWQhJbp.hTs%2BqXXHbFMn2dxgSKBWd%2F%2FEQ8xwnV3KKsA9IwVJ7nU",
-    ])
-    // .expect("Set-Cookie", /sid=;/) // TODO should unset invalid cookie
-    .expect(401);
+    assert.strictEqual(res.status, 401);
+    assert.strictEqual(res.body.message, "Unauthorized");
+  });
 
-  t.equal(res.body.message, "Unauthorized");
+  test("invalid or expired cookie", async () => {
+    const res = await testAgent
+      .post("/logout")
+      .set("Cookie", [
+        "sid=s%3A1-72JvmsWh4S1qUun8a7Dh4Mh8QdNY31u0.FrwZBwXd6mSWXocz77hy0%2FvKBWovHj7DnvZR2SHrZh8",
+      ]);
+
+    assert.strictEqual(res.status, 401);
+    assert.strictEqual(res.body.message, "Unauthorized");
+    assert.match(res.headers["set-cookie"]?.[0]!, /sid=;/);
+  });
 });

@@ -4,36 +4,31 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "license": "MIT",
+  "type": "module",
   "scripts": {
-    "dev": "env $(grep -v '^#' .env) tsnd --transpile-only src",
-    "prebuild": "rm -rf dist",
-    "build": "tsc -p tsconfig.build.json",
-    "start": "NODE_ENV=production node -r source-map-support/register dist/index.js",
-    "test": "env $(grep -v '^#' .env.test) tap --ts --no-coverage test/{*.test.ts,**/*.test.ts}",
-    "test:watch": "npm run test -- -w"
-  },
-  "dependencies": {
-    "bcrypt": "^5.0.1",
-    "celebrate": "^15.0.0",
-    "dayjs": "^1.10.6",
-    "express": "^4.17.1",
-    "express-async-errors": "^3.1.1",
-    "express-session": "^1.17.2",
-    "helmet": "^4.6.0",
-    "nodemailer": "^6.6.3",
-    "source-map-support": "^0.5.19"
+    "dev": "tsx watch --env-file=.env ./src/index.ts",
+    "test": "rm -f test.db; tsx --env-file=.env.test --test test/**/*.test.ts",
+    "build": "rm -rf dist; tsc -p tsconfig.build.json"
   },
   "devDependencies": {
-    "@types/bcrypt": "^5.0.0",
-    "@types/express": "^4.17.13",
-    "@types/express-session": "^1.17.4",
-    "@types/node": "^16.3.3",
-    "@types/nodemailer": "^6.4.4",
-    "@types/supertest": "^2.0.11",
-    "@types/tap": "^15.0.5",
-    "supertest": "^6.1.3",
-    "tap": "^15.0.9",
-    "ts-node-dev": "^1.1.8",
-    "typescript": "^4.3.5"
+    "@types/bcrypt": "^6.0.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.3",
+    "@types/express-session": "^1.18.2",
+    "@types/node": "^24.1.0",
+    "@types/nodemailer": "^6.4.17",
+    "@types/supertest": "^6.0.3",
+    "@types/uid-safe": "^2.1.5",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.2.0",
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "nodemailer": "^7.0.5",
+    "zod": "^4.0.14"
   }
 }
