@@ -12,7 +12,6 @@ export async function postJson(
       "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : null,
-    credentials: "include",
     ...init,
   });
   if (!res.ok) throw res;
@@ -24,7 +23,6 @@ export async function getJson(url: string, init?: RequestInit) {
     headers: {
       Accept: "application/json",
     },
-    credentials: "include",
     ...init,
   });
   if (!res.ok) throw res;
