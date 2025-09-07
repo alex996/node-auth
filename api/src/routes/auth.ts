@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import type { Express, Request, Response } from "express";
 import crypto from "node:crypto";
 import * as z from "zod";
-import { env } from "../config.js";
+import { COOKIE_OPTS, env } from "../config.js";
 import { db, serializeUser, type User } from "../db.js";
 import { auth, guest, validate } from "../middleware.js";
 import { sendEmail, verificationEmail } from "./email.js";
@@ -194,7 +194,8 @@ export function logOut(req: Request, res: Response) {
   req.session.destroy((err) => {
     if (err) throw err;
 
-    res.clearCookie(env.SESSION_COOKIE_NAME);
+    // https://expressjs.com/en/5x/api.html#res.clearCookie
+    res.clearCookie(env.SESSION_COOKIE_NAME, COOKIE_OPTS);
 
     res.json({ message: "OK" });
   });

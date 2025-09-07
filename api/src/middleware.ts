@@ -3,7 +3,7 @@ import type { ParamsDictionary } from "express-serve-static-core";
 import type { ParsedQs } from "qs";
 import type { ZodType } from "zod";
 import * as z from "zod";
-import { env, PWD_CONFIRMED_FOR_MS } from "./config.js";
+import { COOKIE_OPTS, env, PWD_CONFIRMED_FOR_MS } from "./config.js";
 import { db, type User } from "./db.js";
 
 // Inspired by express-zod-safe and zod-express-middleware.
@@ -37,7 +37,7 @@ export const auth: RequestHandler = (req, res, next) => {
   if (!req.session.userId) {
     if (req.headers.cookie?.includes(`${env.SESSION_COOKIE_NAME}=s%3A`)) {
       // The cookie is likely expired. Clear it.
-      res.clearCookie(env.SESSION_COOKIE_NAME);
+      res.clearCookie(env.SESSION_COOKIE_NAME, COOKIE_OPTS);
     }
     return res.status(401).json({ message: "Unauthorized" });
   }

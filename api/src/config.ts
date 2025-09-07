@@ -1,3 +1,4 @@
+import type { CookieOptions } from "express";
 import type { SessionOptions } from "express-session";
 import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport/index.js";
@@ -48,18 +49,20 @@ export const LINK_EXPIRES_IN_HRS = 12;
 export const PWD_CONFIRMED_FOR_MS = ONE_HOUR_MS * 2;
 export const TOKEN_EXPIRES_IN_HRS = 2;
 
+export const COOKIE_OPTS: CookieOptions = {
+  // domain: undefined, // current API domain
+  // expires: undefined, // non-persistent cookie
+  // httpOnly: true,
+  maxAge: env.SESSION_LIFETIME_MS,
+  // path: "/", // root path of the domain
+  sameSite: true,
+  secure: env.IN_PROD, // if true, front-end must use HTTPS too
+};
+
 // https://github.com/expressjs/session#api
 // Defaults are commented
 export const SESSION_OPTS: SessionOptions = {
-  cookie: {
-    // domain: undefined, // current domain
-    // expires: undefined, // non-persistent cookie
-    // httpOnly: true,
-    maxAge: env.SESSION_LIFETIME_MS,
-    // path: "/", // root path of the domain
-    sameSite: true,
-    secure: env.IN_PROD, // if true, front-end must use HTTPS too
-  },
+  cookie: COOKIE_OPTS,
   // The prefix will be used to log out of all sessions.
   genid: (req) => `${req.session?.userId || 0}-${uid.sync(24)}`,
   name: env.SESSION_COOKIE_NAME,
