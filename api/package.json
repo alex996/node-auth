@@ -28,7 +28,7 @@
     "better-sqlite3": "^12.2.0",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
-    "nodemailer": "^7.0.5",
+    "nodemailer": "^7.0.7",
     "zod": "^4.0.14"
   }
 }
