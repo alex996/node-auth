@@ -8,7 +8,7 @@
     "dev": "webpack serve --mode development"
   },
   "dependencies": {
-    "preact": "^10.27.0",
+    "preact": "^10.28.2",
     "wouter-preact": "^3.7.1"
   },
   "devDependencies": {
